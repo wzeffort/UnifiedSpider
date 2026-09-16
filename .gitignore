@@ -1,0 +1,15 @@
+data/
+sessions/
+browser_profiles/
+__pycache__/
+*.png
+.env
+.env.*
+*.pem
+*.key
+*.log
+*.zip
+runtime/
+browsers/
+user-data/
+releases/
