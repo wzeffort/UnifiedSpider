@@ -138,9 +138,6 @@ Cookie 来源是实际连接扩展的浏览器个人资料，不会跨浏览器�
 
 工具不直接读取日常 Chrome/Edge 的 Cookie 数据库，不自动输入账号密码，也不保证 Cookie 一定有效。本站状态仅保存到本机；不要分享 Cookie、导出文件或 sessions 目录。
 
-实现参考了 [DouYinSparkFlow v3.2.1 的浏览器登录模块](https://github.com/2061360308/DouYinSparkFlow/blob/v3.2.1/configTool/browser_login.py)
-“独立浏览器资料目录 + 用户登录 + 状态快照”的思路，未复制其代码。
-其登录 Cookie 名称和登录判断针对抖音，不能通用于知乎；未引入其额外浏览器、代理或全域 Cookie 兜底逻辑。
 
 已实现公开 HTML 页面、动态渲染页面、字段提取、批量/同站链接/链接翻页、
 人工确认页面捕获、已保存会话复用、任务队列与恢复、四种格式下载。
