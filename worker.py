@@ -10,7 +10,7 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from core import extract, validate_url
 from content import classify, page_record, discover
 from storage import read, save, session_path
-from site_access import applicable_state, needs_confirmation, remaining, restrict
+from site_access import applicable_state, needs_confirmation, remaining, record_denial, clear_restriction, denial_count
 
 ROOT = Path(__file__).resolve().parent
 
@@ -129,6 +129,7 @@ async def run(config, folder=None):
                 new_rows = extract(page.get('content_html') or html, url, config.get('fields', []), config.get('row', '')) if config.get('fields') else [
                     {'来源网址': url, '标题': page['title'], '正文': page['text']}]
                 pages.append(page)
+                clear_restriction(url)
                 if page.get('partial_content'):
                     for item in new_rows:
                         item['内容范围'] = '部分内容／试读，非全文'
@@ -140,11 +141,11 @@ async def run(config, folder=None):
             except Exception as exc:
                 message = str(exc)
                 if message in ('blocked', 'verification', 'rate_limited'):
-                    restrict(url, message)
+                    record_denial(url, message)
                 failures.append({'url': url, 'reason': message,
-                    'needs_user': message in ('blocked', 'verification', 'login', 'session_required', 'cooldown', 'paywall') or '403' in message,
+                    'needs_user': message in ('blocked', 'verification', 'rate_limited', 'login', 'session_required', 'cooldown', 'paywall') or '403' in message,
                     'engine': used, 'access_mode': 'saved-state' if with_state else 'anonymous',
-                    'cooldown_seconds': remaining(url)})
+                    'cooldown_seconds': remaining(url), 'denial_count': denial_count(url)})
             checkpoint(current=url)
             if queue:
                 await asyncio.sleep(1)

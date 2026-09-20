@@ -8,7 +8,6 @@ import sys
 import threading
 import time
 import uuid
-import webbrowser
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -66,6 +65,29 @@ def index():
 def health():
     return {'app': 'UnifiedSpider', 'ok': True, 'version': '2.1',
             'backend': 'FastAPI', 'engines': ['Scrapy', 'Crawl4AI', 'Playwright']}
+
+
+@app.get('/api/browser/cookie-editor.zip')
+def cookie_editor_package():
+    from cookie_editor_package import package
+    data, name = package()
+    return Response(data, media_type='application/zip', headers={'Content-Disposition': f'attachment; filename="{name}"'})
+
+
+@app.get('/browser-bridge.js')
+def browser_bridge_script():
+    return Response((ROOT / 'browser_bridge.js').read_text(encoding='utf-8'), media_type='application/javascript')
+
+
+@app.get('/api/browser/extension.zip')
+def browser_extension_package():
+    import io
+    import zipfile
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as archive:
+        for name in ('manifest.json', 'background.js', 'content.js', 'popup.html', 'popup.js', 'README.md'):
+            archive.write(ROOT / 'browser-extension' / name, 'browser-extension/' + name)
+    return Response(stream.getvalue(), media_type='application/zip', headers={'Content-Disposition': 'attachment; filename="WebCollector-Browser-Bridge.zip"'})
 
 
 @app.get('/api/jobs')
@@ -189,13 +211,25 @@ def open_session(config: dict):
         job_id = str(uuid.uuid4())
         folder = job_folder(job_id)
         folder.mkdir()
-        save(folder / 'session-config.json', {'url': url})
+        save(folder / 'session-config.json', {'url': url, 'auto_save': config.get('auto_save') is True})
         save(folder / 'session-status.json', {'state': 'opening', 'message': '正在打开可见浏览器…'})
         with (folder / 'session.log').open('w', encoding='utf-8') as log:
             SESSION_PROCESS = subprocess.Popen([sys.executable, str(ROOT / 'session_worker.py'), job_id],
                 cwd=ROOT, stdout=log, stderr=log, env={**os.environ, 'PYTHONUTF8': '1'})
         SESSION_ID = job_id
         return {'id': job_id}
+
+
+@app.get('/api/browser/default')
+def default_browser_info(scheme: str = 'https'):
+    from default_browser import browser_info
+    return browser_info(scheme)
+
+
+@app.post('/api/browser/default/open')
+def open_default_browser(config: dict):
+    from default_browser import open_default
+    return open_default(config.get('url', ''))
 
 
 @app.post('/api/cookies/import')
@@ -205,7 +239,7 @@ def import_cookies(config: dict):
     with SESSION_LOCK:
         if SESSION_PROCESS and SESSION_PROCESS.poll() is None:
             raise ValueError('请先关闭操作浏览器再导入，避免旧状态覆盖新状态')
-        return store_state(url, config.get('data'))
+        return store_state(url, config.get('data'), allow_retry=True)
 
 
 @app.get('/api/session/{job_id}')
@@ -230,5 +264,6 @@ if __name__ == '__main__':
     import uvicorn
     port = int(os.environ.get('SPIDER_PORT', '18765'))
     if '--no-browser' not in sys.argv:
-        threading.Timer(1, lambda: webbrowser.open(f'http://127.0.0.1:{port}')).start()
+        from default_browser import open_default
+        threading.Timer(1, lambda: open_default(f'http://127.0.0.1:{port}/')).start()
     uvicorn.run(app, host='127.0.0.1', port=port, log_level='warning')

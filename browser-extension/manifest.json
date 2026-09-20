@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "网页资料收集助手 · 本机连接",
+  "version": "1.3.0",
+  "description": "经您授权后，只将当前采集网址适用的 Cookie 发送给本机资料收集助手。",
+  "permissions": ["cookies", "storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_popup": "popup.html", "default_title": "资料收集助手：网站授权"},
+  "content_scripts": [{
+    "matches": ["http://127.0.0.1/*", "http://localhost/*"],
+    "js": ["content.js"], "run_at": "document_start", "all_frames": false
+  }]
+}

@@ -106,6 +106,9 @@ try:
     assert partial['pages'] == 1 and partial['failed_pages'] == 1
     assert COUNTS['/blocked'] == 1, '403 should not be repeatedly retried'
     assert request('/api/result/' + job_id)['rows']
+    assert remaining(SITE) == 0
+    for _ in range(2):
+        assert wait(start('/blocked'))['status'] == 'needs_user'
     assert remaining(SITE) > 0
     blocked_count = COUNTS['/blocked']
     paused = wait(start('/blocked'))
@@ -162,15 +165,17 @@ try:
     print('Confirmed browser capture and saved-session reuse: PASS')
 
     # Exercise the actual UI-triggered headed browser subprocess as well.
-    browser_id = request('/api/session/open', {'url': SITE + '/grant'})['id']
+    browser_id = request('/api/session/open', {'url': SITE + '/grant', 'auto_save': True})['id']
     deadline = time.monotonic() + 40
     while True:
         state = request('/api/session/' + browser_id)
-        if state['state'] == 'waiting':
+        if state['state'] == 'waiting' and state.get('cookie_count', 0) > 0:
             break
         assert state['state'] != 'closed', state
         assert time.monotonic() < deadline, state
         time.sleep(.2)
+    assert '自动保存' in state['message'], state
+    assert not (job_folder(browser_id) / 'result.json').exists()
     request('/api/session/' + browser_id + '/confirm', {})
     while True:
         state = request('/api/session/' + browser_id)

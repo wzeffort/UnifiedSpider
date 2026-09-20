@@ -50,6 +50,38 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(classify('<html><body><pre>'+error+'</pre></body></html>', 200), 'blocked')
         self.assertEqual(classify('<article><p>'+('An article about response codes. '*10)+error+'</p></article>', 200), 'ok')
 
+    def test_three_denials_and_reset(self):
+        url = 'https://example.com/a'
+        for count in (1, 2):
+            self.assertEqual(site_access.record_denial(url, 'blocked'), count)
+            self.assertEqual(site_access.remaining(url), 0)
+        self.assertEqual(site_access.denial_count('https://other.com'), 0)
+        self.assertEqual(site_access.record_denial(url, 'blocked'), 3)
+        self.assertGreater(site_access.remaining(url), 0)
+        with site_access.connection() as db:
+            before = db.execute('SELECT until FROM cooldown').fetchone()[0]
+        site_access.record_denial(url, 'blocked')
+        with site_access.connection() as db:
+            self.assertEqual(db.execute('SELECT until FROM cooldown').fetchone()[0], before)
+        site_access.clear_restriction(url)
+        self.assertEqual(site_access.denial_count(url), 0)
+        self.assertEqual(site_access.record_denial(url, 'blocked'), 1)
+
+    def test_expired_count_starts_fresh(self):
+        with patch('site_access.time.time', return_value=1000):
+            for _ in range(3):
+                site_access.record_denial('https://example.com', 'blocked')
+        with patch('site_access.time.time', return_value=1301):
+            self.assertEqual(site_access.remaining('https://example.com'), 0)
+            self.assertEqual(site_access.record_denial('https://example.com', 'blocked'), 1)
+
+    def test_concurrent_denials_are_not_lost(self):
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            counts = list(pool.map(lambda _: site_access.record_denial('https://example.com', 'blocked'), range(3)))
+        self.assertEqual(sorted(counts), [1, 2, 3])
+        self.assertGreater(site_access.remaining('https://example.com'), 0)
+
     def test_target_answer_excludes_recommendations(self):
         html = '<title>Question</title><main><div class="AnswerItem" data-aid="11"><div class="RichText">Wrong answer</div></div><div class="AnswerItem" data-aid="22"><div class="RichContent-inner">Correct answer</div></div></main>'
         record = page_record('https://www.zhihu.com/question/1/answer/22', html, 'test')
