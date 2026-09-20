@@ -13,6 +13,11 @@ with sync_playwright() as p:
     assert not page.locator('#cookiePanel').evaluate('(el)=>el.open')
     page.locator('#cookiePanel > summary').click()
     assert page.locator('#cookiePaste').is_visible()
+    assert page.locator('#cookieFile').is_visible()
+    assert page.locator('#importCookies').is_visible()
+    assert page.locator('#cookiePanel a').count() == 0
+    assert page.locator('a[href="/api/browser/cookie-editor.zip"]').count() == 1
+    assert '自动获取失败时' in page.locator('#cookiePanel').inner_text()
     assert page.locator('#openDefaultBrowser').count() == 0
     assert page.locator('#autoBrowserCookies').is_checked()
     assert page.locator('#independentBrowser').count() == 0
