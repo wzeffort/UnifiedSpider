@@ -30,7 +30,7 @@ if __name__ == '__main__':
     result = {}
     process = CrawlerProcess(settings={
         'LOG_LEVEL': 'WARNING', 'RETRY_TIMES': 2,
-        'RETRY_HTTP_CODES': [408, 429, 500, 502, 503, 504],
+        'RETRY_HTTP_CODES': [408, 500, 502, 503, 504],
         'DOWNLOAD_TIMEOUT': 25, 'DOWNLOAD_MAXSIZE': 12 * 1024 * 1024,
         'AUTOTHROTTLE_ENABLED': True, 'AUTOTHROTTLE_START_DELAY': 1,
         'AUTOTHROTTLE_MAX_DELAY': 10, 'CONCURRENT_REQUESTS': 1,

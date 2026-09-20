@@ -1,5 +1,7 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>统一爬虫 · UnifiedSpider</title>
 <style>
+[hidden]{display:none!important}
+#cookieResult{padding:14px 18px;border:1px solid #cdd9e4;border-radius:8px;white-space:pre-line;margin:12px 0;background:#f3f6fa}#cookieResult[data-state=saved]{background:#eaf7ef;border-color:#75b68c;color:#185d31}#cookieResult[data-state=error],#cookieResult[data-state=empty],#cookieResult[data-state=permission]{background:#fff6e5;border-color:#d9b168;color:#725016}
 *{box-sizing:border-box}body{margin:0;background:#f2f5f8;color:#203047;font:15px system-ui,'Microsoft YaHei',sans-serif}header{background:#152e48;color:white;padding:24px 36px}header h1{margin:0 0 8px;font-size:24px}header p{margin:0;color:#b8cfe0}.layout{display:grid;grid-template-columns:340px 1fr;gap:22px;margin:24px auto;max-width:1450px;padding:0 24px}.card{background:white;border:1px solid #dde5ed;border-radius:12px;padding:22px;margin-bottom:18px}h2{font-size:18px;margin:0 0 18px}label{display:block;margin:12px 0 6px}input,select,textarea{width:100%;padding:10px;border:1px solid #cdd9e4;border-radius:6px;font:inherit}input[type=checkbox]{width:auto}button,.download{border:0;background:#087f8c;color:white;border-radius:6px;padding:10px 15px;cursor:pointer;font:inherit;text-decoration:none;display:inline-block;margin:4px 4px 4px 0}button.secondary{background:#e9f0f5;color:#29435b}button:disabled{opacity:.5;cursor:wait}.hint{font-size:13px;color:#677d90;line-height:1.7}.status{padding:12px;background:#e9f4f5;border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere}.field{display:grid;grid-template-columns:1fr 2fr 85px 36px;gap:6px;margin:8px 0}.field button{padding:4px}iframe{width:100%;height:380px;border:1px solid #d8e0e8;border-radius:6px;background:white}.tablewrap{overflow:auto;max-height:400px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:10px;border-bottom:1px solid #dde5ed;text-align:left;white-space:pre-wrap;max-width:450px;min-width:120px;overflow-wrap:anywhere}th{background:#edf3f7;position:sticky;top:0}pre{max-height:400px;overflow:auto;white-space:pre-wrap}.job{padding:10px 0;border-bottom:1px solid #edf1f5;overflow-wrap:anywhere}.job button{font-size:12px;padding:5px 9px}@media(max-width:900px){.layout{grid-template-columns:1fr}.field{grid-template-columns:1fr}header{padding:20px}}
 
 .layout{display:block;max-width:980px}.card{padding:26px}summary{cursor:pointer;color:#426078;padding:12px 0;font-weight:600}.primary{font-size:18px;padding:13px 24px}#url{font-size:17px;margin:8px 0}#table{max-height:260px}#status{margin-top:16px}.step{color:#087f8c;margin-right:8px}.technical{margin-top:20px;border-top:1px solid #e3e9ef}.downloads{padding:12px 0}.empty{color:#677d90;padding:20px 0}header{background:white;color:#203047;border-bottom:1px solid #dde5ed}header p{color:#677d90}header>div{max-width:932px;margin:auto}
@@ -9,7 +11,14 @@
 <p class="hint">打开您想保存的网页，复制浏览器顶部的网址，再粘贴到下面。</p>
 <input id="url" placeholder="例如：https://example.com" aria-label="要收集的网页地址">
 <p id="siteInfo" class="hint" aria-live="polite">输入网址后，这里会显示是否有可用的本站浏览状态。</p>
-</section><section class="card"><h2><span class="step">②</span>点击按钮，等待完成</h2>
+<div id="cookieResult" role="status" aria-live="polite" data-state="idle">尚未获取 Cookie，请先输入网址。</div>
+<label><input id="autoBrowserCookies" type="checkbox" checked> 输入网址后自动同步本站 Cookie（推荐）</label>
+<p id="bridgeStatus" class="hint" role="status">正在检查配套扩展连接…</p>
+<button id="authorizeInputCookies" class="secondary" hidden>授权本站并同步</button><button id="manualCookieFallback" class="secondary">改用手动 Cookie</button>
+<button id="cancelCookieSync" class="secondary" hidden>取消等待授权</button>
+<p id="browserEnvironment" class="hint" hidden></p>
+<details id="bridgeHelp"><summary>首次连接 / 扩展未就绪时看这里</summary><p class="hint"><a href="/api/browser/cookie-editor.zip">下载 Cookie-Editor 本机收集版（Edge / Chrome，非官方修改版）</a>并解压。请先停用旧的独立连接扩展，避免重复响应。</p><p id="browserInstallHelp" class="hint">Edge 打开 edge://extensions；Chrome 打开 chrome://extensions。开启开发人员模式，点击“加载解压缩的扩展”，选择含 manifest.json 的 CookieEditor-Collector 文件夹。</p><p class="hint">安装后，用同一浏览器个人资料打开 http://127.0.0.1:18765/ 并刷新。首次弹出授权窗口时点击“允许本站连接”，保存成功后窗口自动关闭。不能从内置预览浏览器读取另一浏览器的 Cookie；不支持的浏览器可使用手动导入。</p><p class="hint">不需要登录的公开页面，可取消上方勾选直接收集。插件不可用时，仍可在下方粘贴导入。</p></details>
+</section><details class="card" id="cookiePanel"><summary>手动导入本站 Cookie（备用）</summary><p class="hint">先填写上方网址，再粘贴本站 Cookie 并导入；公开网页可直接跳过此步。导入新的可用状态后，可立即重试。</p><p class="hint">在已登录的目标网页，用 Cookie-Editor 导出本站 JSON，直接粘贴到下面，也可以选择 JSON 文件。只导入当前网址对应的网站；新状态将替换本工具保存的本站状态。请勿分享文件或上传到聊天，导入后妥善删除导出副本。</p><a href="https://cookie-editor.com/" target="_blank" rel="noopener noreferrer">Cookie-Editor 官方安装入口</a> · <a href="/api/browser/cookie-editor.zip">下载 Cookie-Editor 本机收集版（非官方）</a><p class="hint">修改版保留编辑和 Export，另加本站授权与自动同步。请停用旧的“本机连接”配套扩展，避免重复响应；官方商店版不会自动获得此功能。</p><label for="cookiePaste">粘贴本站 Cookie（JSON 格式）</label><textarea id="cookiePaste" rows="5" autocomplete="off" spellcheck="false" placeholder="在插件中选择导出 JSON，然后在这里粘贴。请勿粘贴到聊天。"></textarea><p class="hint">粘贴和文件二选一。成功导入后会自动清空输入框。</p><label for="cookieFile">或选择 JSON 文件</label><input id="cookieFile" type="file" accept=".json,application/json" aria-label="选择本站 Cookie JSON 文件"><button id="importCookies">导入本站登录状态</button><p id="cookieImportStatus" class="hint" role="status"></p></details><section class="card"><h2><span class="step">②</span>点击按钮，等待完成</h2>
 <p class="hint">将保存网页当前可见的文字和图片。会员页面可保存试读部分，并注明“部分内容”。</p><button class="primary" id="run">开始收集网页</button><div id="status" class="status" role="status" aria-live="polite">请先粘贴一个网址，再点击上方按钮。</div></section>
 <section class="card"><h2><span class="step">③</span>下载收集好的内容</h2><p class="hint">Markdown 保留正文排版；需要连同图片保存，请选“下载图文包”，解压后双击“打开阅读.html”即可查看。文件名自动使用网页标题和采集时间，不再固定。</p><div id="downloads" class="downloads"></div><p id="quality" class="hint"></p><p id="count" class="hint">收集完成后，这里会出现下载按钮。</p><details><summary>预览已收集内容</summary><div class="tablewrap" id="table"></div></details><details><summary>查看正文文本</summary><pre id="markdown"></pre></details>
 <p class="hint" id="downloadHelp">文件一般保存在电脑的“下载”文件夹。若后缀为 .crdownload，表示下载尚未完成；请在浏览器下载列表中查看进度，不要直接改后缀。</p>
@@ -18,11 +27,11 @@
 <iframe id="preview" sandbox="allow-scripts" referrerpolicy="no-referrer" title="字段点选预览"></iframe>
 <div class="hint">内容名称 / 定位规则（自动填写，可修改）/ 内容类型</div><div id="fields"></div><button class="secondary" id="add">手动添加一项</button><button id="extract">保存选中的内容</button>
 <details class="technical"><summary>列表规则与规则保存</summary><label>每条记录容器</label><input id="row" placeholder="例如 .product 或 table tbody tr"><p class="hint">字段定位规则需相对于容器填写；留空则每页一条记录。</p><button class="secondary" id="save">保存规则</button><button class="secondary" id="load">读取规则</button></details></details>
-<details class="card" id="sessionPanel"><summary>需要登录或验证？打开浏览器处理</summary><p class="hint">点击打开 → 在弹出的浏览器里自行登录或验证 → 看到您需要的正文后，回这里点击“保存当前页面”。登录状态保存在本机，后续采集本站时可使用。不会自动填写账号密码，也不能保证所有网站都能通过验证。</p><button id="openSession">打开操作浏览器</button><button id="saveSessionState" disabled>保存本站登录状态</button><button id="confirmSession" disabled>已看到正文，保存当前页面</button><button id="closeSession" class="secondary" disabled>关闭操作浏览器</button><div id="sessionStatus" class="hint" role="status"></div><details><summary>在常用浏览器里已登录？导入本站状态</summary><p class="hint">在已登录的目标网页，用 Cookie-Editor 导出本站 JSON，直接粘贴到下面，也可以选择 JSON 文件。只导入当前网址对应的网站；新状态将替换本工具保存的本站状态。请勿分享文件或上传到聊天，导入后妥善删除导出副本。</p><a href="https://cookie-editor.com/" target="_blank" rel="noopener noreferrer">Cookie-Editor 官方安装入口</a><label for="cookiePaste">粘贴本站 Cookie（JSON 格式）</label><textarea id="cookiePaste" rows="5" autocomplete="off" spellcheck="false" placeholder="在插件中选择导出 JSON，然后在这里粘贴。请勿粘贴到聊天。"></textarea><p class="hint">粘贴和文件二选一。成功导入后会自动清空输入框。</p><label for="cookieFile">或选择 JSON 文件</label><input id="cookieFile" type="file" accept=".json,application/json" aria-label="选择本站 Cookie JSON 文件"><button id="importCookies">导入本站登录状态</button><p id="cookieImportStatus" class="hint" role="status"></p></details></details>
+<details class="card" id="sessionPanel"><summary>需要登录或验证？打开浏览器处理</summary><p class="hint">点击打开 → 在弹出的浏览器里自行登录或验证 → 看到您需要的正文后，回这里点击“保存当前页面”。登录状态保存在本机，后续采集本站时可使用。不会自动填写账号密码，也不能保证所有网站都能通过验证。</p><button id="openSession">打开操作浏览器</button><button id="saveSessionState" disabled>保存本站登录状态</button><button id="confirmSession" disabled>已看到正文，保存当前页面</button><button id="closeSession" class="secondary" disabled>关闭操作浏览器</button><div id="sessionStatus" class="hint" role="status"></div></details>
 <details class="card" id="manual"><summary>网页收集失败？也可以复制正文保存</summary><p class="hint">如果您在浏览器里能看到正文：打开原网页 → 复制需要的文字 → 粘贴到下面 → 点击保存。这里只保存您粘贴的内容，不会自动获取原网页全文。</p><a id="original" class="download" target="_blank" rel="noopener noreferrer" hidden>打开原网页</a><label>资料标题（选填）</label><input id="manualTitle" placeholder="例如：知乎回答摘录"><label>粘贴正文</label><textarea id="manualText" rows="8" placeholder="把您从网页上复制的文字粘贴到这里"></textarea><button id="importText">保存这段文字</button><p id="manualStatus" class="hint" role="status"></p></details>
 <details class="card" id="history"><summary>以前收集的内容</summary><div id="jobs"></div></details></details>
 </div>
-<script>
+<script src="/browser-bridge.js"></script><script>
 const $=id=>document.getElementById(id);const token='__TOKEN__';let current=null,waiting=localStorage.getItem('spider-waiting'),polling=false,sessionId=localStorage.getItem('spider-session-id');
 function status(text){$('status').textContent=text}
 function readableError(error){const text=String(error||'未知错误');if(text==='paywall')return '页面未返回可保存的正文；有试读正文的页面可以重新采集，保存可见部分。';if(text==='session_required')return '这个知乎回答尚无可用的本站状态，请打开下方操作浏览器，看到正文后保存。不会替您登录。';if(text==='cooldown')return '本站刚刚限制了访问，自动采集已暂停约 5 分钟。请先在操作浏览器查看，不要连续重试。';if(text==='api_error')return '网站返回了接口错误，未保存为正文。请打开原网页检查。';if(/403|anti.bot|forbidden|blocked|verification|login/i.test(text))return '网站拒绝了自动收集，可能需要登录或验证。请展开“打开浏览器处理”，自行操作后保存当前页面。也可以复制正文保存。';if(/timeout|超时/i.test(text))return '网页读取超时，请稍后重试，或复制正文保存。';return text}
@@ -68,7 +77,8 @@ async function refresh(){
     else{waiting=null;localStorage.removeItem('spider-waiting');$('run').disabled=false;
      if(job.pages>0||job.status==='done'){await show(job.id);status((job.status==='done'?'采集完成':'任务结束，已保留成功部分')+'：'+job.pages+' 页，失败 '+(job.failed_pages||0)+' 页。请在第③步下载文件。')}
      else status(readableError(job.error||'任务已取消'));
-     if(job.status==='needs_user'){ $('url').value=job.url;status(readableError(job.error)+'\n可在页面底部“更多选项与帮助”中处理。')}
+     if(job.status==='needs_user'){ $('url').value=job.url;const count=Math.max(0,...(job.failures||[]).map(f=>f.denial_count||0));status(readableError(job.error)+(count?'\n本站连续拒绝 '+count+'/3 次。'+(count<3?'尚未暂停，请检查 Cookie 后手动重试。':'已暂停约 5 分钟。'):'')+'\n可在上方导入 Cookie，或打开操作浏览器处理。')}
+     await updateSiteInfo();
     }
    }
   }
@@ -81,11 +91,138 @@ async function refresh(){
  }catch(e){status(e.message)}finally{polling=false}
 }
 $('saveSessionState').onclick=async()=>{try{if(sessionId){await api('/api/session/'+sessionId+'/state',{});$('sessionStatus').textContent='正在保存本站状态…';setTimeout(updateSiteInfo,1500)}}catch(e){$('sessionStatus').textContent=e.message}};
-$('importCookies').onclick=async()=>{const button=$('importCookies');button.disabled=true;try{const file=$('cookieFile').files[0],paste=$('cookiePaste').value.trim();if(file&&paste)throw Error('请只选择一种方式：粘贴内容或上传文件');if(!file&&!paste)throw Error('请粘贴 Cookie JSON，或选择 JSON 文件');if(file?file.size>1000000:new Blob([paste]).size>1000000)throw Error('内容过大，请只导出本站 Cookie');let data;try{data=JSON.parse(file?await file.text():paste)}catch{throw Error('内容不是有效 JSON，请在插件中选择“导出 JSON”后重新复制')};const result=await api('/api/cookies/import',{url:$('url').value.trim(),data});$('cookieImportStatus').textContent=result.message+' 忽略 '+result.ignored_count+' 条无关、过期或不支持的记录。';$('cookieFile').value='';$('cookiePaste').value='';await updateSiteInfo()}catch(e){$('cookieImportStatus').textContent=e.message}finally{button.disabled=false}};
-$('openSession').onclick=async()=>{try{const data=await api('/api/session/open',{url:$('url').value.trim()});sessionId=data.id;localStorage.setItem('spider-session-id',sessionId);$('sessionStatus').textContent='正在打开浏览器…';await refresh()}catch(e){$('sessionStatus').textContent=e.message}};
+let cookieImportBusy=false;
+function showCookieResult(state,url,count,message,at=Date.now()){
+ const box=$('cookieResult');box.dataset.state=state;
+ let host='本站';try{host=new URL(url).hostname}catch{}
+ if(state==='saved')box.textContent=`✓ 已成功获取 ${host} 的 ${Number(count)||0} 条 Cookie，可以开始收集。\n获取时间：${new Date(at).toLocaleTimeString()}。已保存到本机；是否登录有效仍需网站确认。`;
+ else if(state==='empty')box.textContent=`未获取到 ${host} 的 Cookie。公开页面仍可采集；需要登录的页面请确认当前浏览器已登录，或手动导入。`;
+ else box.textContent=message||'尚未获取 Cookie，请先输入网址。';
+}
+$('url').addEventListener('input',()=>showCookieResult('idle',$('url').value,0,$('autoBrowserCookies').checked?'网址已变化，等待检查本站 Cookie…':'请在 Cookie-Editor 中导出 JSON，再点击“读取剪贴板并导入 Cookie”。'));
+function cookieImportStart(){
+ if(cookieImportBusy)throw Error('正在导入，请稍候。');
+ if($('run').disabled)throw Error('请先取消等待或等当前任务结束，再导入 Cookie。');
+ const url=$('url').value.trim();let parsed;try{parsed=new URL(url)}catch{throw Error('请先填写目标网页的完整网址。')}
+ if(!['http:','https:'].includes(parsed.protocol)||parsed.username||parsed.password)throw Error('请先填写有效的 http 或 https 网页地址。');
+ cookieImportBusy=true;$('importCookies').disabled=true;
+ return url;
+}
+function cookieImportEnd(){cookieImportBusy=false;$('importCookies').disabled=false}
+async function importCookieText(raw,url){
+ if(!raw.trim())throw Error('没有读取到内容，请先在 Cookie-Editor 中点击 Export → JSON。');
+ if(new Blob([raw]).size>1000000)throw Error('内容过大，请只导出本站 Cookie。');
+ let data;try{data=JSON.parse(raw)}catch{throw Error('内容不是有效 JSON，请在插件中选择“导出 JSON”后重新复制。')}
+ if(url!==$('url').value.trim())throw Error('网址已变化，请确认目标网站后重新导入。');
+ clearTimeout(inputSyncTimer);inputSyncSequence++;$('autoBrowserCookies').checked=false;recentCookieSync.clear();
+ if(inputSyncPromise)await inputSyncPromise;
+ if(url!==$('url').value.trim())throw Error('网址已变化，请重新导入。');
+ const result=await api('/api/cookies/import',{url,data});
+ $('cookieImportStatus').textContent=result.message+' 忽略 '+result.ignored_count+' 条无关、过期或不支持的记录。后台同步已关闭，采集将使用本次导入的状态。';
+ $('cookieFile').value='';$('cookiePaste').value='';$('useSession').checked=true;
+ $('bridgeStatus').textContent='已导入本站 Cookie，无需连接配套扩展，可以开始收集。';
+ showCookieResult('saved',url,result.cookie_count);
+ status('本站 Cookie 已导入。点击“开始收集网页”即可。');
+ await updateSiteInfo();
+}
+$('importCookies').onclick=async()=>{
+ if(cookieImportBusy)return;let started=false;
+ try{const url=cookieImportStart();started=true;const file=$('cookieFile').files[0],paste=$('cookiePaste').value.trim();
+ if(file&&paste)throw Error('请只选择一种方式：粘贴内容或上传文件');
+ if(!file&&!paste)throw Error('请粘贴 Cookie JSON，或选择 JSON 文件');
+ if(file&&file.size>1000000)throw Error('内容过大，请只导出本站 Cookie');
+ await importCookieText(file?await file.text():paste,url);
+ }catch(e){$('cookieImportStatus').textContent=e.message}finally{if(started)cookieImportEnd()}
+};
+async function checkBrowserConnection(){const info=await browserCookieBridge('ping');$('bridgeStatus').textContent=info.message;if(info.status!=='connected')$('bridgeHelp').open=true;return info}
+checkBrowserConnection();
+api('/api/browser/default?scheme=http').then(info=>{
+ $('browserEnvironment').textContent=info.message;
+ if(info.extension_supported)$('browserInstallHelp').textContent=`检测到 ${info.name}：打开 ${info.extension_manager}，开启开发人员模式，点击“加载解压缩的扩展”，选择含 manifest.json 的 CookieEditor-Collector 文件夹。若当前使用其他浏览器，Edge 的管理地址为 edge://extensions，Chrome 为 chrome://extensions。`;
+ else if(info.detected)$('browserInstallHelp').textContent=`默认浏览器是 ${info.name}。当前配套扩展已适配 Edge / Chrome，未验证此浏览器；请使用手动导入，或自行选择 Edge / Chrome 安装扩展，不会替您修改默认浏览器。`;
+}).catch(()=>{$('browserEnvironment').textContent='未能识别浏览器名称，启动仍按系统默认设置打开。扩展连接状态以上方提示为准。'});
+window.addEventListener('focus',()=>{if(!$('run').disabled)scheduleInputSync()});
+window.addEventListener('message',event=>{
+ if(event.source!==window||event.origin!==location.origin||event.data?.source!=='collector-extension-permission')return;
+ try{if(new URL($('url').value.trim()).origin===event.data.origin&&!$('run').disabled)scheduleInputSync()}catch{}
+});
+let inputSyncTimer,inputSyncPromise=null,inputSyncSequence=0;
+const recentCookieSync=new Map();
+function scheduleInputSync(){clearTimeout(inputSyncTimer);inputSyncSequence++;inputSyncTimer=setTimeout(prefetchInputCookies,650)}
+async function prefetchInputCookies(){
+ const seq=inputSyncSequence;
+ if(inputSyncPromise)await inputSyncPromise;
+ if(seq!==inputSyncSequence||!$('autoBrowserCookies').checked||!$('useSession').checked||$('run').disabled)return;
+ const url=$('url').value.trim();
+ try{const u=new URL(url);if(!['http:','https:'].includes(u.protocol)||u.username||u.password)return}catch{return}
+ const cached=recentCookieSync.get(url);if(cached&&Date.now()-cached.at<30000){showCookieResult('saved',url,cached.count,'',cached.at);return}
+ const active=()=>seq===inputSyncSequence&&url===$('url').value.trim()&&$('autoBrowserCookies').checked;
+ const task=(async()=>{
+  $('bridgeStatus').textContent='正在检查本站授权并后台同步…';$('authorizeInputCookies').hidden=true;
+  showCookieResult('pending',url,0,'正在获取本站 Cookie，请稍候…');
+  const connection=await browserCookieBridge('ping');if(!active())return;
+  if(connection.status!=='connected'){$('bridgeStatus').textContent=connection.message+' 也可以点击“改用手动 Cookie”。';showCookieResult('error',url,0,'未获取成功：'+$('bridgeStatus').textContent);return}
+  if(!connection.version||connection.version.localeCompare('1.3.0',undefined,{numeric:true})<0){$('bridgeStatus').textContent='请将配套扩展更新到 1.3.0 并重新加载，才能在输入网址后自动同步。';showCookieResult('error',url,0,$('bridgeStatus').textContent);return}
+  const result=await browserCookieBridge('capture-quiet',[url],token);if(!active())return;
+  $('bridgeStatus').textContent=result.message;$('authorizeInputCookies').hidden=result.status!=='permission';
+  showCookieResult(result.status,url,result.count,result.message);
+  if(result.status==='saved'){recentCookieSync.set(url,{at:Date.now(),count:result.count});updateSiteInfo()}
+ })();
+ inputSyncPromise=task;try{await task}finally{if(inputSyncPromise===task)inputSyncPromise=null}
+}
+$('url').addEventListener('input',scheduleInputSync);
+$('autoBrowserCookies').addEventListener('change',scheduleInputSync);
+$('useSession').addEventListener('change',scheduleInputSync);
+$('manualCookieFallback').onclick=()=>{cookieSyncCancelled=true;clearTimeout(inputSyncTimer);inputSyncSequence++;$('autoBrowserCookies').checked=false;$('authorizeInputCookies').hidden=true;$('cookiePanel').open=true;$('cookiePaste').focus();$('bridgeStatus').textContent='已切换为手动导入，后台同步已关闭，不会覆盖您手动导入的状态。'};
+$('authorizeInputCookies').onclick=async()=>{try{$('run').disabled=true;await syncBrowserCookies();$('authorizeInputCookies').hidden=true;status('本站状态已同步。需要收集正文时再点击开始收集。')}catch(e){status(e.message)}finally{$('run').disabled=false}};
+let cookieSyncCancelled=false;
+let permissionGroup=null;
+const authorizeButton=document.createElement('button');authorizeButton.id='openCookieAuthorization';authorizeButton.textContent='打开授权窗口';authorizeButton.hidden=true;
+$('status').after(authorizeButton,$('cancelCookieSync'));
+authorizeButton.onclick=async()=>{if(permissionGroup){const result=await browserCookieBridge('authorize',permissionGroup,token);status(result.message)}};
+$('cancelCookieSync').onclick=()=>{cookieSyncCancelled=true;$('bridgeStatus').textContent='已取消，未继续采集。'};
+async function syncBrowserCookies(){
+ if(!$('autoBrowserCookies').checked||!$('useSession').checked)return;
+ clearTimeout(inputSyncTimer);
+ if(inputSyncPromise)await inputSyncPromise;
+ if(!$('bulk').value.trim()){const cached=recentCookieSync.get($('url').value.trim());if(cached&&Date.now()-cached.at<30000)return}
+ cookieSyncCancelled=false;
+ const originalInputs=JSON.stringify([$('url').value,$('bulk').value]);
+ const connected=await browserCookieBridge('ping');
+ if(connected.status!=='connected'){$('bridgeHelp').open=true;throw Error(connected.message+' 若使用已导入状态或公开网页，可取消“后台同步”后收集。')}
+ if(!connected.version||Number(connected.version.split('.')[1])<2)throw Error('配套扩展版本过旧，请更新到 1.2.0 并在扩展管理中重新加载，再刷新工具页面。');
+ const urls=$('bulk').value.trim()?$('bulk').value.trim().split(/\r?\n/):[$('url').value.trim()];
+ if(urls.length>100)throw Error('一次最多同步 100 个网址。');
+ // Save a union for each origin so a second path does not erase the first path's state.
+ const groups=new Map();for(const url of [...new Set(urls)]){const origin=new URL(url).origin;if(!groups.has(origin))groups.set(origin,[]);groups.get(origin).push(url)}
+ for(const group of groups.values()){
+  status('正在从浏览器同步 '+new URL(group[0]).hostname+' 的 Cookie（最长 8 秒）…');
+  showCookieResult('pending',group[0],0,'正在获取本站 Cookie，请稍候…');
+  let info=await browserCookieBridge('capture',group,token);$('bridgeStatus').textContent=info.message;
+  if(info.status==='permission'){
+   permissionGroup=group;authorizeButton.hidden=false;
+   $('cancelCookieSync').hidden=false;
+   const deadline=Date.now()+120000;
+   try{while(info.status==='permission'&&Date.now()<deadline){
+    if(cookieSyncCancelled)throw Error('已取消授权等待，未开始采集。');
+    const progress=info.message+'\n授权后自动继续，剩余 '+Math.ceil((deadline-Date.now())/1000)+' 秒。也可以取消等待。';
+    $('bridgeStatus').textContent=progress;status(progress);
+    await new Promise(resolve=>setTimeout(resolve,500));
+    if(cookieSyncCancelled)throw Error('已取消授权等待，未开始采集。');
+    info=await browserCookieBridge('capture',group,token);
+   }}finally{$('cancelCookieSync').hidden=true;authorizeButton.hidden=true;permissionGroup=null}
+   $('bridgeStatus').textContent=info.message;
+  }
+  showCookieResult(info.status,group[0],info.count,info.message);
+  if(!['saved','empty','unsupported'].includes(info.status))throw Error(info.message);
+  if(info.status==='saved')for(const url of group)recentCookieSync.set(url,{at:Date.now(),count:info.count});
+ }
+ if(originalInputs!==JSON.stringify([$('url').value,$('bulk').value]))throw Error('网址已修改，请重新点击开始收集。');
+ updateSiteInfo(); // Informational refresh must not delay job submission.
+}
 $('confirmSession').onclick=async()=>{try{if(sessionId){await api('/api/session/'+sessionId+'/confirm',{});$('sessionStatus').textContent='正在保存，请稍候…'}}catch(e){$('sessionStatus').textContent=e.message}};
 $('closeSession').onclick=async()=>{try{if(sessionId)await api('/api/session/'+sessionId+'/cancel',{})}catch(e){$('sessionStatus').textContent=e.message}};
-$('run').onclick=async()=>{try{$('run').disabled=true;if(!$('url').value.trim()&&!$('bulk').value.trim())throw Error('请先粘贴您要收集的网页地址');status('正在读取网页，通常需要几十秒，请稍候…');const mode=$('mode').value;if(mode==='next'&&!$('next').value.trim())throw Error('请填写下一页 CSS 选择器');const data=await api('/api/jobs',{url:$('url').value.trim(),urls:$('bulk').value.trim()?$('bulk').value.trim().split(/\r?\n/):undefined,engine:$('engine').value,wait_for:$('waitFor').value.trim(),use_session:$('useSession').checked,limit:mode==='single'?1:Number($('limit').value),site:mode==='site',next:mode==='next'?$('next').value.trim():'',scroll:$('scroll').checked,fields:$('advanced').open?fields():[],row:$('advanced').open?$('row').value.trim():''});waiting=data.id;localStorage.setItem('spider-waiting',waiting);await refresh()}catch(e){status(e.message);$('run').disabled=false}};
+$('run').onclick=async()=>{try{$('run').disabled=true;if(!$('url').value.trim()&&!$('bulk').value.trim())throw Error('请先粘贴您要收集的网页地址');status('正在准备本站登录状态…');await syncBrowserCookies();status('正在读取网页，通常需要几十秒，请稍候…');const mode=$('mode').value;if(mode==='next'&&!$('next').value.trim())throw Error('请填写下一页 CSS 选择器');const data=await api('/api/jobs',{url:$('url').value.trim(),urls:$('bulk').value.trim()?$('bulk').value.trim().split(/\r?\n/):undefined,engine:$('engine').value,wait_for:$('waitFor').value.trim(),use_session:$('useSession').checked,limit:mode==='single'?1:Number($('limit').value),site:mode==='site',next:mode==='next'?$('next').value.trim():'',scroll:$('scroll').checked,fields:$('advanced').open?fields():[],row:$('advanced').open?$('row').value.trim():''});waiting=data.id;localStorage.setItem('spider-waiting',waiting);await refresh()}catch(e){status(e.message);$('run').disabled=false}};
 $('extract').onclick=async()=>{try{if(!current)throw Error('请先完成采集');if(!fields().length)throw Error('请先添加至少一个完整字段');const result=await api('/api/extract',{id:current,fields:fields(),row:$('row').value.trim()});renderRows(result.rows);status('字段提取已保存，可直接导出。')}catch(e){status(e.message)}};
 $('save').onclick=()=>{localStorage.setItem('unified-spider-rules',JSON.stringify({fields:fields(),row:$('row').value,next:$('next').value}));status('规则已保存到当前浏览器')};$('load').onclick=()=>{try{const data=JSON.parse(localStorage.getItem('unified-spider-rules'));if(!data)throw Error('尚未保存规则');$('fields').replaceChildren();for(const field of data.fields)addField(field.name,field.selector,field.attr);$('row').value=data.row;$('next').value=data.next;status('规则已读取')}catch(e){status(e.message)}};
 refresh();setInterval(refresh,2500);

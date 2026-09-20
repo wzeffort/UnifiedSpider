@@ -6,8 +6,24 @@ with sync_playwright() as p:
     page = browser.new_page()
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
+    page.route('**/api/browser/default?scheme=http', lambda route: route.fulfill(content_type='application/json', body='{"name":"Google Chrome","detected":true,"extension_supported":true,"extension_manager":"chrome://extensions","message":"Default: Google Chrome"}'))
     page.goto('http://127.0.0.1:18765')
+    page.wait_for_function("document.getElementById('browserInstallHelp').textContent.includes('检测到 Google Chrome')")
+    assert not page.locator('#cookiePaste').is_visible()
+    assert not page.locator('#cookiePanel').evaluate('(el)=>el.open')
+    page.locator('#cookiePanel > summary').click()
+    assert page.locator('#cookiePaste').is_visible()
+    assert page.locator('#openDefaultBrowser').count() == 0
+    assert page.locator('#autoBrowserCookies').is_checked()
+    assert page.locator('#independentBrowser').count() == 0
+    assert page.locator('#autoCookies').count() == 0
+    assert page.locator('#cookiePanel').evaluate('(el)=>el.tagName==="DETAILS"')
+    assert page.locator('#cookiePanel').bounding_box()['y'] < page.locator('#run').bounding_box()['y']
     assert not page.locator('#moreTools').evaluate('(el)=>el.open')
+    page.locator('#url').fill('https://example.com/')
+    page.locator('#run').click()
+    page.wait_for_function("document.getElementById('status').textContent.includes('未连接配套扩展')")
+    assert not page.locator('#run').is_disabled()
     page.locator('#moreTools > summary').click()
     assert '网站拒绝' in page.evaluate("readableError('HTTP 403 Forbidden')")
     page.locator('#url').fill('https://www.zhihu.com/question/1933227451481323222/answer/1941421698881681174')
@@ -36,7 +52,7 @@ with sync_playwright() as p:
     page.locator('#url').fill('https://cookie-test.example.invalid/')
     page.locator('#sessionPanel').evaluate('(el)=>el.open=true')
     page.locator('#cookieFile').set_input_files({'name': 'fixture.json', 'mimeType': 'application/json', 'buffer': b'[{"name":"test","value":"synthetic-fixture","domain":"cookie-test.example.invalid","path":"/","secure":true}]'})
-    page.locator('#sessionPanel > details').evaluate('(el)=>el.open=true')
+    assert page.locator('#cookiePanel').is_visible()
     page.locator('#importCookies').click()
     page.wait_for_function("document.getElementById('cookieImportStatus').textContent.includes('已保存本站 1 条')")
     assert 'synthetic-fixture' not in page.locator('body').text_content()
@@ -49,6 +65,7 @@ with sync_playwright() as p:
     page.locator('#importCookies').click()
     page.wait_for_function("document.getElementById('cookieImportStatus').textContent.includes('不是有效 JSON')")
     assert 'invalid-json-fixture' not in page.locator('#cookieImportStatus').inner_text()
+    assert page.locator('#importClipboardCookies').count() == 0
     assert not errors, errors
     print('Friendly 403 message, manual import, TXT download: PASS')
     browser.close()

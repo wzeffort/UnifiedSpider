@@ -3,7 +3,6 @@ import importlib.util
 import subprocess
 import sys
 import urllib.request
-import webbrowser
 from pathlib import Path
 
 url = 'http://127.0.0.1:18765'
@@ -21,4 +20,5 @@ except (OSError, ValueError):
     sys.exit(subprocess.call([sys.executable, str(Path(__file__).with_name('app.py'))]))
 else:
     print('UnifiedSpider is already running. Opening browser.')
-    webbrowser.open(url)
+    from default_browser import open_default
+    open_default(url)

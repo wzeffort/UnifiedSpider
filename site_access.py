@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 from storage import DATA, read, session_path
 
 DB = DATA / 'access.sqlite3'
+DENIAL_LIMIT = 3
+DENIAL_WINDOW = 300
 
 
 def origin(url):
@@ -20,6 +22,7 @@ def connection():
     try:
         with db:
             db.execute('CREATE TABLE IF NOT EXISTS cooldown (origin TEXT PRIMARY KEY, until REAL, reason TEXT)')
+            db.execute('CREATE TABLE IF NOT EXISTS denials (origin TEXT PRIMARY KEY, count INTEGER, updated REAL)')
             yield db
     finally:
         db.close()
@@ -34,6 +37,29 @@ def restrict(url, reason, seconds=300):
 def clear_restriction(url):
     with connection() as db:
         db.execute('DELETE FROM cooldown WHERE origin=?', (origin(url),))
+        db.execute('DELETE FROM denials WHERE origin=?', (origin(url),))
+
+
+def denial_count(url):
+    with connection() as db:
+        row = db.execute('SELECT count, updated FROM denials WHERE origin=?', (origin(url),)).fetchone()
+    return row[0] if row and time.time() - row[1] < DENIAL_WINDOW else 0
+
+
+def record_denial(url, reason):
+    """Count actual denied requests, never clicks or attempts during cooldown."""
+    with connection() as db:
+        db.execute('BEGIN IMMEDIATE')
+        now, key = time.time(), origin(url)
+        cooldown = db.execute('SELECT until FROM cooldown WHERE origin=?', (key,)).fetchone()
+        if cooldown and cooldown[0] > now:
+            return DENIAL_LIMIT
+        row = db.execute('SELECT count, updated FROM denials WHERE origin=?', (key,)).fetchone()
+        count = min(DENIAL_LIMIT, row[0] + 1) if row and now - row[1] < DENIAL_WINDOW else 1
+        db.execute('INSERT INTO denials VALUES (?, ?, ?) ON CONFLICT(origin) DO UPDATE SET count=excluded.count, updated=excluded.updated', (key, count, now))
+        if count >= DENIAL_LIMIT:
+            db.execute('INSERT INTO cooldown VALUES (?, ?, ?) ON CONFLICT(origin) DO UPDATE SET until=excluded.until, reason=excluded.reason', (key, now + DENIAL_WINDOW, reason))
+        return count
 
 
 def remaining(url):
@@ -42,8 +68,9 @@ def remaining(url):
     return max(0, math.ceil(row[0] - time.time())) if row else 0
 
 
-def applicable_state(url):
-    state = read(session_path(url), {})
+def applicable_state(url, state=None):
+    if state is None:
+        state = read(session_path(url), {})
     parsed = urlsplit(url)
     host, now = parsed.hostname, time.time()
     for cookie in state.get('cookies', []):
@@ -68,8 +95,11 @@ def describe(url, use_session=True):
     available = applicable_state(url)
     seconds = remaining(url)
     confirmation = needs_confirmation(url, use_session)
+    count = denial_count(url)
     if seconds:
-        message = f'本站刚刚限制了访问，自动采集暂停 {seconds} 秒。可打开操作浏览器自行查看。'
+        message = f'本站连续拒绝访问，自动采集暂停 {seconds} 秒。可导入新的本站状态或打开操作浏览器自行查看。'
+    elif count:
+        message = f'本站已连续拒绝 {count}/{DENIAL_LIMIT} 次，尚未暂停。请检查登录状态后手动重试；连续拒绝 3 次才等待 5 分钟。'
     elif confirmation:
         message = '这个知乎回答尚无可用的已保存状态。建议先打开操作浏览器，看到正文后保存；不代表必须登录，也不会代填密码。'
     elif available and use_session:
@@ -79,5 +109,5 @@ def describe(url, use_session=True):
     else:
         message = '尚无可用的本站浏览状态，本次将以未登录方式访问。勾选复用不会自动登录。'
     return {'origin': origin(url), 'state_file_exists': session_path(url).exists(),
-            'state_available': available, 'use_session': use_session, 'cooldown_seconds': seconds,
+            'state_available': available, 'use_session': use_session, 'cooldown_seconds': seconds, 'denial_count': count,
             'suggest_manual': bool(seconds or confirmation), 'message': message}
