@@ -19,10 +19,12 @@ def submit(path):
         if digest in INFLIGHT:return INFLIGHT[digest]
         # Retain paid, previously completed official results after migration.
         cache_path=mineru_client.CACHE/(digest+'-hybrid-v1.json')
-        cached=read(cache_path,{}) or read(mineru_client.CACHE/(digest+'-vlm-v1.json'),{})
+        official=read(mineru_client.CACHE/(digest+'-vlm-v1.json'),{})
+        cached=read(cache_path,{}) or official
         if cached.get('result'):
             done=Future();done.set_result(cached['result']);return done
-        lane=min(PENDING,key=PENDING.get)
+        # Resume an uploaded official job instead of submitting it to another provider.
+        lane='official' if official.get('batch_id') and not official.get('failed') else min(PENDING,key=PENDING.get)
         PENDING[lane]+=1
         fn=mineru_selfhost.recognize if lane=='local' else mineru_client.recognize_official
         future=POOLS[lane].submit(fn,path,600)
