@@ -15,7 +15,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 from content import classify, page_record
 import article_store
 import rag_assets
-from article_metadata import extract_metadata
+from article_metadata import extract_metadata, extract_account_name
 from export_names import export_name
 from jobs import job_folder
 from storage import DATA, read, save
@@ -247,6 +247,9 @@ def report(batch_id, payload):
         markup = payload.get('html', '')
         if not isinstance(markup, str) or not markup.strip():
             raise ValueError('页面尚未加载出内容')
+        account_name = extract_account_name(markup, data['source'])
+        if account_name:
+            data['source']['name'] = account_name
         current = public(data)['url']
         observed = str(payload.get('url', ''))
         if data['phase'] == 'scan':

@@ -57,7 +57,16 @@ def export_author(batch_id, output_settings=None):
         raise ValueError('尚无成功保存的正文')
     if str(folder) in rag_assets.ACTIVE:
         raise ValueError('图片正在处理，请等待完成后导出')
-    destination = folder_path((output_settings or settings())['folder']) / author_key(data['source'])
+    from author_directory import resolve_directory
+    archive_identity = author_key(data['source'])
+    # Reuse verified account names learned in earlier capture tasks.
+    if not data['source'].get('name'):
+        for meta in folder.parent.glob('*/author-batch.json'):
+            old = read(meta, {})
+            if old.get('source', {}).get('name') and author_key(old['source']) == archive_identity:
+                data['source']['name'] = old['source']['name']
+                break
+    destination = resolve_directory(folder_path((output_settings or settings())['folder']), data['source'], archive_identity)
     destination.mkdir(parents=True, exist_ok=True)
     marker = read(destination / 'export.json', {})
     previous_hashes = marker.get('files_sha256', {})
@@ -139,6 +148,7 @@ def export_author(batch_id, output_settings=None):
         for name, content in files.items():
             write_changed(destination / name, content, previous_hashes.get(name))
     export = {'schema_version': 2, 'batch_id': batch_id, 'revision': data['revision'],
+              'author_key': archive_identity, 'author_name': data['source'].get('name'),
               'state': data['state'], 'documents_count': count, 'author_documents_count': len(documents),
               'documents_sha256': hashes['documents.jsonl'], 'documents_file': str(index_path),
               'documents_relative_path': 'documents.jsonl', 'files_sha256': all_hashes,
