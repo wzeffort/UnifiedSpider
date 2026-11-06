@@ -12,10 +12,10 @@ separate home/config/task output directory. Two provider lanes: local and offici
 one image at a time per lane, hash-based dedup. Official token belongs only in
 `secrets/mineru-api-token`, permission 600, never in Git or command output.
 
-VS Code Remote SSH target: `autodl-aifinance`. Forward remote **18765** to local
-**18767**, keeping local 18765 free for the original running crawler. Install
-Cookie-Editor collector 1.14.6 (or standalone 1.5.6) and open
-`http://127.0.0.1:18767/` in the same local browser profile. The URL remains local
+VS Code Remote SSH target: `autodl-aifinance`. Forward remote **8889** to local
+**8889**, keeping local 18765 free for the original running crawler. Install
+Cookie-Editor collector 1.14.7 (or standalone 1.5.7) and open
+`http://127.0.0.1:8889/` in the same local browser profile. The URL remains local
 to satisfy the extension bridge's origin restrictions; no public service exposure.
 
 Only the author-capture backend dependencies are installed by this script.

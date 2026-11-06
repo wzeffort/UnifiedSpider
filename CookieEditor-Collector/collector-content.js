@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Modified distribution: local collector bridge, 2026-09-20.
-if(['http://127.0.0.1:18765','http://127.0.0.1:18767','http://localhost:18765','http://localhost:18767'].includes(location.origin)&&location.pathname==='/'){
+if(['http://127.0.0.1:18765','http://127.0.0.1:18767','http://127.0.0.1:8889','http://localhost:18765','http://localhost:18767','http://localhost:8889'].includes(location.origin)&&location.pathname==='/'){
  window.addEventListener('message',async e=>{
   const m=e.data;
   if(e.source!==window||e.origin!==location.origin||m?.source!=='collector-page'||typeof m.id!=='string'||!['ping','capture','capture-quiet','authorize','author-step'].includes(m.action))return;

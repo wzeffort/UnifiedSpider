@@ -1,5 +1,5 @@
 importScripts('author-batch.js');
-const LOCAL = new Set(['http://127.0.0.1:18765','http://127.0.0.1:18767', 'http://localhost:18765','http://localhost:18767']);
+const LOCAL = new Set(['http://127.0.0.1:18765','http://127.0.0.1:18767','http://127.0.0.1:8889', 'http://localhost:18765','http://localhost:18767','http://localhost:8889']);
 function sourceOrigin(sender) {
   const u = new URL(sender.url || 'about:blank');
   if (sender.frameId !== 0 || !sender.tab || !LOCAL.has(u.origin) || u.pathname !== '/') throw Error('Invalid sender');

@@ -1,7 +1,7 @@
 import './author-batch.js';
 // SPDX-License-Identifier: GPL-3.0-only
 // Local collector integration, added 2026-09-20. No cookie values in logs/storage replies.
-const LOCAL = new Set(['http://127.0.0.1:18765','http://127.0.0.1:18767','http://localhost:18765','http://localhost:18767']);
+const LOCAL = new Set(['http://127.0.0.1:18765','http://127.0.0.1:18767','http://127.0.0.1:8889','http://localhost:18765','http://localhost:18767','http://localhost:8889']);
 chrome.runtime.onMessage.addListener((m,s,reply)=>{
   if(m?.source!=='cookie-editor-collector')return false;
   handle(m,s).then(reply).catch(()=>reply({status:'error',message:'Cookie-Editor 本机同步失败，请检查本机服务或重新授权。'}));

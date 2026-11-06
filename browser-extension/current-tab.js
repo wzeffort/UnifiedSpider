@@ -14,7 +14,7 @@ collectButton.addEventListener('click', async () => {
       throw Error('请先切换到文章标签页，完成验证并看到正文后再点击。');
     }
     const locals = (await chrome.tabs.query({})).filter(t => {
-      try { const u=new URL(t.url); return ['http://127.0.0.1:18765','http://127.0.0.1:18767','http://localhost:18765','http://localhost:18767'].includes(u.origin) && u.pathname==='/'; }
+      try { const u=new URL(t.url); return ['http://127.0.0.1:18765','http://127.0.0.1:18767','http://127.0.0.1:8889','http://localhost:18765','http://localhost:18767','http://localhost:8889'].includes(u.origin) && u.pathname==='/'; }
       catch {return false;}
     });
     if (!locals.length) throw Error('请先在同一个浏览器打开本机工具 http://127.0.0.1:18765/，再回文章标签页采集。');
