@@ -1,6 +1,7 @@
+import './author-batch.js';
 // SPDX-License-Identifier: GPL-3.0-only
 // Local collector integration, added 2026-09-20. No cookie values in logs/storage replies.
-const LOCAL = new Set(['http://127.0.0.1:18765','http://localhost:18765']);
+const LOCAL = new Set(['http://127.0.0.1:18765','http://127.0.0.1:18767','http://localhost:18765','http://localhost:18767']);
 chrome.runtime.onMessage.addListener((m,s,reply)=>{
   if(m?.source!=='cookie-editor-collector')return false;
   handle(m,s).then(reply).catch(()=>reply({status:'error',message:'Cookie-Editor 本机同步失败，请检查本机服务或重新授权。'}));
@@ -9,7 +10,8 @@ chrome.runtime.onMessage.addListener((m,s,reply)=>{
 async function handle(m,s){
   const page=new URL(s.url||'about:blank');
   if(!s.tab||s.frameId!==0||!LOCAL.has(page.origin)||page.pathname!=='/')throw Error('Invalid sender');
-  if(m.action==='ping')return {status:'connected',version:'1.3.0',provider:'cookie-editor',message:'已连接 Cookie-Editor 本机收集版，可获取当前浏览器已有的本站 Cookie。'};
+  if(m.action==='author-step')return runAuthorBatchStep(m,s,page.origin);
+  if(m.action==='ping')return {status:'connected',version:chrome.runtime.getManifest().version,capabilities:['author-batch','author-scan-v2'],provider:'cookie-editor',message:'已连接 Cookie-Editor 本机收集版，可获取当前浏览器已有的本站 Cookie。'};
   if(!['capture','capture-quiet','authorize'].includes(m.action)||typeof m.token!=='string'||m.token.length>200)throw Error('Invalid request');
   const raw=Array.isArray(m.url)?m.url:[m.url];
   if(!raw.length||raw.length>100||raw.some(u=>typeof u!=='string'))throw Error('Invalid URL');

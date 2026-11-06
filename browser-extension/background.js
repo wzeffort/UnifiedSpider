@@ -1,4 +1,5 @@
-const LOCAL = new Set(['http://127.0.0.1:18765', 'http://localhost:18765']);
+importScripts('author-batch.js');
+const LOCAL = new Set(['http://127.0.0.1:18765','http://127.0.0.1:18767', 'http://localhost:18765','http://localhost:18767']);
 function sourceOrigin(sender) {
   const u = new URL(sender.url || 'about:blank');
   if (sender.frameId !== 0 || !sender.tab || !LOCAL.has(u.origin) || u.pathname !== '/') throw Error('Invalid sender');
@@ -6,10 +7,11 @@ function sourceOrigin(sender) {
 }
 async function handle(message, sender) {
   const local = sourceOrigin(sender);
+  if(message.action==='author-step')return runAuthorBatchStep(message,sender,local);
   if (message.action === 'ping') {
     const ua = navigator.userAgent;
     const browser = /Edg\//.test(ua) ? 'Microsoft Edge' : /Chrome\//.test(ua) ? 'Google Chrome / Chromium' : '当前浏览器';
-    return {status:'connected', browser, version:chrome.runtime.getManifest().version,
+    return {status:'connected', browser, version:chrome.runtime.getManifest().version, capabilities:['author-batch','author-scan-v2'],
       message:`已连接 ${browser} 的配套扩展，收集时将后台同步当前个人资料中的本站 Cookie。`};
   }
   if (!['capture','capture-quiet','authorize'].includes(message.action) || typeof message.token !== 'string' || message.token.length > 200) throw Error('Invalid request');

@@ -70,7 +70,16 @@ def classify(html, status=200):
         return 'login'
     if len(text) < 1500 and re.search(r'verify you are human|请完成验证|访问异常|请求过于频繁', text, re.I):
         return 'verification'
+    if soup.select_one('#js_content') is None and (
+        re.search(r'环境异常', title)
+        or (len(text) < 1500 and re.search(r'环境异常|完成验证后即可继续访问', text))
+        or soup.select_one('form[action*="wappoc_appmsgcaptcha"], iframe[src*="wappoc_appmsgcaptcha"]')
+    ):
+        return 'verification'
     if len(text) < 60:
+        article = soup.select_one('#js_content, .article__bd, .status-content, .article-content')
+        if article is not None and article.get_text(' ', strip=True):
+            return 'ok'
         return 'empty'
     return 'ok'
 
@@ -90,6 +99,8 @@ def readable_text(main):
 
 
 def page_record(url, html, engine):
+    if classify(html) == 'verification':
+        raise ValueError('当前页面仍需验证，请在原标签页完成验证并看到正文后再保存。')
     limited = classify(html) == 'paywall'
     soup = BeautifulSoup(html, 'html.parser')
     title = soup.title.get_text(' ', strip=True) if soup.title else url
@@ -99,6 +110,22 @@ def page_record(url, html, engine):
     scope = 'generic'
     notes = []
     parsed = urlsplit(url)
+    if parsed.hostname in ('xueqiu.com', 'www.xueqiu.com') and re.fullmatch(r'/\d+/\d+/?', parsed.path):
+        main = soup.select_one('.article__bd, .status-content, .status-detail .content, .article-content')
+        if main is None or not main.get_text(' ', strip=True):
+            raise ValueError('未定位到雪球帖子正文，请确认页面已展开全文，或使用扩展单页保存。')
+        heading = soup.select_one('.article__hd__title, .status-title, h1')
+        if heading:
+            title = heading.get_text(' ', strip=True)
+        scope = 'xueqiu-post'
+    if parsed.hostname == 'mp.weixin.qq.com':
+        main = soup.select_one('#js_content')
+        if main is None or not main.get_text(' ', strip=True):
+            raise ValueError('未找到微信公众号正文，请在原标签页完成验证并看到正文后再保存。')
+        heading = soup.select_one('#activity-name, .rich_media_title')
+        if heading:
+            title = heading.get_text(' ', strip=True)
+        scope = 'wechat-article'
     if parsed.hostname == 'blog.csdn.net':
         main = soup.select_one('#content_views')
         heading = soup.select_one('#articleContentId, .title-article')

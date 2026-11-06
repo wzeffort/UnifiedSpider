@@ -27,6 +27,8 @@ SESSION_LOCK = threading.Lock()
 
 @asynccontextmanager
 async def lifespan(app):
+    import author_pipeline
+    author_pipeline.recover()
     yield
     shutdown()
     if SESSION_PROCESS and SESSION_PROCESS.poll() is None:
@@ -64,7 +66,8 @@ def index():
 @app.get('/health')
 def health():
     return {'app': 'UnifiedSpider', 'ok': True, 'version': '2.1',
-            'backend': 'FastAPI', 'engines': ['Scrapy', 'Crawl4AI', 'Playwright']}
+            'backend': 'FastAPI', 'engines': ['Scrapy', 'Crawl4AI', 'Playwright'],
+            'author_scan_modes': ['incremental', 'history'], 'author_cancel': True}
 
 
 @app.get('/api/browser/cookie-editor.zip')
@@ -85,7 +88,7 @@ def browser_extension_package():
     import zipfile
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as archive:
-        for name in ('manifest.json', 'background.js', 'content.js', 'popup.html', 'popup.js', 'README.md'):
+        for name in ('manifest.json', 'background.js', 'content.js', 'popup.html', 'popup.js', 'current-tab.js', 'author-batch.js', 'README.md'):
             archive.write(ROOT / 'browser-extension' / name, 'browser-extension/' + name)
     return Response(stream.getvalue(), media_type='application/zip', headers={'Content-Disposition': 'attachment; filename="WebCollector-Browser-Bridge.zip"'})
 
@@ -93,6 +96,106 @@ def browser_extension_package():
 @app.get('/api/jobs')
 def jobs():
     return public_jobs()
+
+
+@app.get('/author-batch-ui.js')
+def author_batch_ui():
+    return Response((ROOT / 'author_batch_ui.js').read_text(encoding='utf-8'), media_type='application/javascript')
+
+
+@app.get('/api/authors')
+def author_list():
+    from author_batch import load, public
+    return [public(load(p.parent.name)) for p in sorted(DATA.glob('*/author-batch.json'), key=lambda p: p.stat().st_mtime, reverse=True)]
+
+
+@app.post('/api/authors')
+def author_create(config: dict):
+    from author_batch import create
+    return create(config)
+
+
+@app.post('/api/authors/validate')
+def author_validate(config: dict):
+    from author_batch import source_info, scan_mode
+    scan_mode(config)
+    urls = config.get('urls')
+    if not isinstance(urls, list) or not 1 <= len(urls) <= 20:
+        raise ValueError('请输入 1–20 个作者网址')
+    limit = int(config.get('limit', 500))
+    if not 1 <= limit <= 5000:
+        raise ValueError('每个作者上限应为 1–5000 篇')
+    return {'sources': [source_info(url) for url in urls]}
+
+
+@app.get('/api/authors/{batch_id}')
+def author_state(batch_id: str):
+    from author_batch import load, public
+    return public(load(batch_id))
+
+
+@app.post('/api/authors/{batch_id}/report')
+def author_report(batch_id: str, config: dict):
+    from author_batch import report
+    return report(batch_id, config)
+
+
+@app.post('/api/authors/{batch_id}/control')
+def author_control(batch_id: str, config: dict):
+    from author_batch import control
+    return control(batch_id, config.get('action'))
+
+
+@app.post('/api/authors/{batch_id}/enrich')
+def enrich_author(batch_id: str, config: dict):
+    import rag_assets
+    return rag_assets.start(str(uuid.UUID(batch_id)), ocr=config.get('ocr') is True)
+
+
+@app.get('/api/authors/{batch_id}/download')
+def author_download(batch_id: str):
+    from author_batch import bundle
+    return download(bundle(batch_id), 'application/zip', 'author-' + str(uuid.UUID(batch_id))[:8] + '.zip')
+
+
+@app.get('/api/download-settings')
+def download_settings():
+    from download_settings import settings
+    return settings()
+
+
+@app.post('/api/download-settings')
+def set_download_settings(config: dict):
+    from download_settings import update
+    return update(config)
+
+
+@app.post('/api/download-settings/pick')
+def pick_download_folder():
+    from download_settings import pick_folder
+    return pick_folder()
+
+
+@app.post('/api/download-settings/open')
+def open_download_folder():
+    from download_settings import open_folder, settings
+    return open_folder(settings()['folder'])
+
+
+@app.post('/api/authors/{batch_id}/save')
+def save_author_export(batch_id: str):
+    from author_batch import save_to_folder
+    return save_to_folder(batch_id)
+
+
+@app.post('/api/authors/{batch_id}/open-export')
+def open_author_export(batch_id: str):
+    from author_batch import load
+    from download_settings import open_folder
+    exported = load(batch_id).get('last_export')
+    if not exported:
+        raise ValueError('此任务尚未保存到文件夹')
+    return open_folder(exported['folder'])
 
 
 @app.get('/api/site-info')
@@ -117,7 +220,8 @@ def resume(job_id: str):
 
 
 def get_result(job_id):
-    data = read(job_folder(job_id) / 'result.json')
+    import article_store
+    data = article_store.result(job_folder(job_id))
     if not data or not data.get('pages'):
         raise ValueError((data or {}).get('error') or '该任务尚无成功采集的内容')
     from document_view import document_data
@@ -193,12 +297,46 @@ def extract_fields(config: dict):
     for page in data['pages']:
         rows.extend(extract(page.get('content_html') or page['html'], page['url'], config['fields'], config.get('row', '')))
     data['rows'] = rows
-    save(job_folder(job_id) / 'result.json', data)
+    if (job_folder(job_id) / 'articles.sqlite3').exists():
+        import article_store
+        article_store.save_rows(job_folder(job_id), rows)
+    else:
+        save(job_folder(job_id) / 'result.json', data)
     status = read(job_folder(job_id) / 'status.json')
     if status:
         status['rows'] = len(rows)
         save(job_folder(job_id) / 'status.json', status)
     return {'rows': rows}
+
+
+@app.post('/api/browser/page')
+def save_browser_page(config: dict):
+    """Save the user-selected DOM snapshot without navigating to the article again."""
+    from content import classify, page_record
+    url = validate_url(str(config.get('url', '')))
+    markup = config.get('html')
+    if not isinstance(markup, str) or not markup.strip():
+        raise ValueError('当前标签页没有可保存的正文')
+    reason = classify(markup)
+    if reason not in ('ok', 'paywall'):
+        raise ValueError('当前页面仍是登录、验证或异常页面，请在原标签页完成验证并看到正文后再保存：' + reason)
+    record = page_record(url, markup, 'extension-current-tab')
+    if not record['text'].strip():
+        raise ValueError('当前标签页没有可保存的正文')
+    from article_metadata import extract_metadata
+    record.update(extract_metadata(markup))
+    record['notes'].append('直接保存浏览器当前页面；图片保留原链接，未下载图片。')
+    job_id = str(uuid.uuid4())
+    folder = job_folder(job_id)
+    folder.mkdir()
+    rows = [{'来源网址': url, '标题': record['title'], '正文': record['text']}]
+    if record.get('partial_content'):
+        rows[0]['内容范围'] = '部分内容／试读，非全文'
+    save(folder / 'result.json', {'pages': [record], 'rows': rows, 'failures': []})
+    save(folder / 'status.json', {'id': job_id, 'url': url, 'status': 'done',
+        'created': time.strftime('%Y-%m-%d %H:%M:%S'), 'pages': 1, 'rows': 1,
+        'source': 'extension-current-tab'})
+    return {'id': job_id}
 
 
 @app.post('/api/session/open')

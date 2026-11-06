@@ -14,7 +14,7 @@ stamp = time.strftime('%Y%m%d-%H%M%S')
 stage = OUTPUT / ('WebCollector-Windows-x64-' + stamp)
 stage.mkdir()
 (stage / 'app').mkdir()
-files = ['app.py', 'content.py', 'cookie_state.py', 'core.py', 'document_view.py', 'export_names.py',
+files = ['app.py', 'author_batch.py', 'author_pipeline.py', 'article_store.py', 'article_metadata.py', 'rag_assets.py', 'mineru_client.py', 'author_batch_ui.js', 'download_settings.py', 'choose_download_folder.py', 'content.py', 'cookie_state.py', 'core.py', 'document_view.py', 'export_names.py',
          'image_assets.py', 'index.html', 'jobs.py', 'launcher.py', 'scrapy_fetch.py', 'session_worker.py',
          'site_access.py', 'storage.py', 'worker.py', 'requirements.txt', 'portable_check.py']
 for name in files:
