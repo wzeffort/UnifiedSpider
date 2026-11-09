@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='collector-extension-test-') as tmp:
             assert page.locator('#autoBrowserCookies').is_checked()
             result = page.evaluate("browserCookieBridge('ping')")
             assert result['status'] == 'connected', result
-            assert result['browser'] and result['version'] == '1.3.0', result
+            assert result['browser'] and result['version'] == manifest['version'], result
             target = 'https://collector-fixture.example.test/article'
             page.locator('#url').fill(target)
             page.wait_for_function("document.getElementById('bridgeStatus').textContent.includes('后台同步本站')")

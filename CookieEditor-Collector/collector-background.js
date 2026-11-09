@@ -1,6 +1,7 @@
+import './author-batch.js';
 // SPDX-License-Identifier: GPL-3.0-only
 // Local collector integration, added 2026-09-20. No cookie values in logs/storage replies.
-const LOCAL = new Set(['http://127.0.0.1:18765','http://localhost:18765']);
+const LOCAL = new Set(['http://127.0.0.1:18765','http://127.0.0.1:18767','http://127.0.0.1:8889','http://localhost:18765','http://localhost:18767','http://localhost:8889']);
 chrome.runtime.onMessage.addListener((m,s,reply)=>{
   if(m?.source!=='cookie-editor-collector')return false;
   handle(m,s).then(reply).catch(()=>reply({status:'error',message:'Cookie-Editor 本机同步失败，请检查本机服务或重新授权。'}));
@@ -9,7 +10,8 @@ chrome.runtime.onMessage.addListener((m,s,reply)=>{
 async function handle(m,s){
   const page=new URL(s.url||'about:blank');
   if(!s.tab||s.frameId!==0||!LOCAL.has(page.origin)||page.pathname!=='/')throw Error('Invalid sender');
-  if(m.action==='ping')return {status:'connected',version:'1.3.0',provider:'cookie-editor',message:'已连接 Cookie-Editor 本机收集版，可获取当前浏览器已有的本站 Cookie。'};
+  if(m.action==='author-step')return runAuthorBatchStep(m,s,page.origin);
+  if(m.action==='ping')return {status:'connected',version:chrome.runtime.getManifest().version,capabilities:['author-batch','author-scan-v2'],provider:'cookie-editor',message:'已连接 Cookie-Editor 本机收集版，可获取当前浏览器已有的本站 Cookie。'};
   if(!['capture','capture-quiet','authorize'].includes(m.action)||typeof m.token!=='string'||m.token.length>200)throw Error('Invalid request');
   const raw=Array.isArray(m.url)?m.url:[m.url];
   if(!raw.length||raw.length>100||raw.some(u=>typeof u!=='string'))throw Error('Invalid URL');
@@ -23,7 +25,7 @@ async function handle(m,s){
     const key='collector-pending:'+s.tab.id+':'+target.origin;
     let pending=(await chrome.storage.session.get(key))[key];
     if(!pending||pending.expires<Date.now()){
-      pending={id:crypto.randomUUID(),origin:target.origin,pattern,approval,tabId:s.tab.id,expires:Date.now()+600000};
+      pending={id:crypto.randomUUID(),origin:target.origin,localOrigin:page.origin,pattern,approval,tabId:s.tab.id,expires:Date.now()+600000};
       await chrome.storage.session.set({[key]:pending,['collector-request:'+pending.id]:pending});
     }
     if(!pending.opened||m.action==='authorize'){
@@ -43,7 +45,13 @@ async function handle(m,s){
   if(!selected.size)return {status:'empty',message:'未获取到本站 Cookie。请确认当前浏览器已登录，或使用手动导入。'};
   const response=await fetch(page.origin+'/api/cookies/import',{method:'POST',credentials:'omit',redirect:'error',headers:{'Content-Type':'application/json','X-Token':m.token},body:JSON.stringify({url:target.href,data:[...selected.values()]}),signal:AbortSignal.timeout(5000)});
   const result=await response.json();
-  if(!response.ok)return {status:'error',message:result.error||'本站 Cookie 保存失败。'};
+  if(!response.ok){
+    const message=result.error||'本站 Cookie 保存失败。';
+    const key='collector-pending:'+s.tab.id+':'+target.origin;
+    const pending=(await chrome.storage.session.get(key))[key];
+    if(pending)await chrome.storage.session.set({['collector-result:'+pending.id]:{error:message}});
+    return {status:'error',message};
+  }
   // Close only this request's extension-owned authorization window, after local save succeeds.
   const pendingKey='collector-pending:'+s.tab.id+':'+target.origin;
   const pending=(await chrome.storage.session.get(pendingKey))[pendingKey];
@@ -53,7 +61,7 @@ async function handle(m,s){
       const expected=chrome.runtime.getURL('collector-authorize.html')+'?request='+pending.id;
       if(window.type==='popup'&&window.tabs?.length===1&&window.tabs[0].url===expected){
         await chrome.windows.remove(pending.windowId);
-        await chrome.storage.session.remove([pendingKey,'collector-request:'+pending.id]);
+        await chrome.storage.session.remove([pendingKey,'collector-request:'+pending.id,'collector-result:'+pending.id]);
       }
     }catch{} // A user-closed window must not invalidate a successful import.
   }

@@ -6,6 +6,14 @@ chrome.storage.session.get('collector-request:'+id).then(data=>{
  request=data['collector-request:'+id];
  if(!request||request.expires<Date.now()){status.textContent='请求已过期，请回到工具重新授权。';return}
  document.getElementById('site').textContent='网站：'+request.origin;allow.disabled=false;revoke.disabled=false;
+ document.getElementById('destination').textContent=request.localOrigin||'发起请求的收集工具';
+});
+chrome.storage.onChanged.addListener((changes,area)=>{
+ const result=changes['collector-result:'+id]?.newValue;
+ if(area==='session'&&result?.error){
+  status.textContent='授权已保存，但 Cookie 同步失败：'+result.error+'。请回到工具重试，保存成功后窗口会自动关闭。';
+  allow.disabled=false;
+ }
 });
 allow.onclick=async()=>{
  if(!request||request.expires<Date.now()){status.textContent='请求已过期，请重新授权。';return}

@@ -13,7 +13,7 @@ def addon_root():
 def package():
     addon = addon_root()
     root_names = ('manifest.json', 'manifest.edge.json', 'manifest.chrome.json',
-                  'cookie-editor.js', 'collector-background.js', 'collector-content.js',
+                  'cookie-editor.js', 'current-tab.js', 'author-batch.js', 'collector-background.js', 'collector-content.js',
                   'collector-authorize.html', 'collector-authorize.js', 'LICENSE',
                   'README.md', 'COLLECTOR-README.md', 'package.json', 'package-lock.json',
                   'Gruntfile.cjs', 'build.ps1', 'eslint.config.mjs', '.prettierrc.json')

@@ -6,11 +6,12 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
-DATA = ROOT / 'data'
-SESSIONS = ROOT / 'sessions'
-PROFILES = ROOT / 'browser_profiles'
-DATA.mkdir(exist_ok=True)
-SESSIONS.mkdir(exist_ok=True)
+STATE_ROOT = Path(os.environ.get('SPIDER_STATE_ROOT', str(ROOT))).expanduser().resolve()
+DATA = STATE_ROOT / 'data'
+SESSIONS = STATE_ROOT / 'sessions'
+PROFILES = STATE_ROOT / 'browser_profiles'
+DATA.mkdir(parents=True, exist_ok=True)
+SESSIONS.mkdir(parents=True, exist_ok=True)
 
 
 def save(path, value):

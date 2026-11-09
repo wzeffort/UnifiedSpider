@@ -15,6 +15,7 @@ with tempfile.TemporaryDirectory(prefix='cookie-editor-bridge-test-') as tmp, sy
             {'name':'unrelated','value':'never-send','domain':'unrelated.example.test','path':'/','secure':True}])
         page=context.new_page()
         page.goto('http://127.0.0.1:18765/')
+        page.locator('#singleCollector > summary').click()
         result=page.evaluate("browserCookieBridge('ping')")
         assert result['provider']=='cookie-editor',result
         with context.expect_page() as popup_event:
@@ -29,6 +30,8 @@ with tempfile.TemporaryDirectory(prefix='cookie-editor-bridge-test-') as tmp, sy
         popup.locator('#allow').click()
         page.wait_for_function("document.getElementById('cookieResult').dataset.state==='error'")
         assert not popup.is_closed(), 'Failed save must not close the authorization window'
+        popup.wait_for_function("document.getElementById('status').textContent.includes('Cookie 同步失败')")
+        assert '18765' in popup.locator('#destination').inner_text()
         page.evaluate("window.browserCookieBridge=window.originalBridge;recentCookieSync.clear();prefetchInputCookies()")
         page.wait_for_function("document.getElementById('cookieResult').dataset.state==='saved'")
         assert popup.is_closed(), 'Successful save must close only the authorization popup'
