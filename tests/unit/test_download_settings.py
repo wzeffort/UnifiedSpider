@@ -9,7 +9,7 @@ import app
 import author_batch as batch
 import download_settings as downloads
 from storage import read
-from test_author_batch import POST
+from tests.unit.test_author_batch import POST
 
 
 class LocalExports(unittest.TestCase):

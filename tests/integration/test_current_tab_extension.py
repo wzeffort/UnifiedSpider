@@ -7,7 +7,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 from storage import ROOT
-from test_wechat_capture import ARTICLE, CHALLENGE
+from tests.unit.test_wechat_capture import ARTICLE, CHALLENGE
 
 
 def run():

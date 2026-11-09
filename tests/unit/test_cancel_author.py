@@ -8,7 +8,7 @@ from unittest.mock import patch
 import article_store
 import author_batch as batch
 import author_pipeline
-from test_author_batch import POST
+from tests.unit.test_author_batch import POST
 
 
 class CancelAuthor(unittest.TestCase):

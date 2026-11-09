@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import article_store
 import author_batch as batch
-from test_author_batch import LIST, POST
+from tests.unit.test_author_batch import LIST, POST
 
 
 class IncrementalScan(unittest.TestCase):

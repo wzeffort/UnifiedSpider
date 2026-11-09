@@ -105,12 +105,26 @@ www.zhihu.com 和 zhuanlan.zhihu.com 的资料分别保存，不能因一个成�
 
 锁定的直接依赖见 requirements.txt。当前版本：Scrapy 2.19.0、FastAPI 0.141.1、Crawl4AI 0.9.3、Playwright 1.62.0。
 
-验证命令（使用上述 Conda 环境）：
-- python -m unittest test_core.py
-- python test_pagination.py
-- 启动服务后：python test_browser.py
-- 启动服务后：python test_manual.py
-- 启动服务后：python test_backend.py
+## 目录结构
+
+- `app.py`、根目录业务模块：服务入口与采集、存储、OCR 实现。
+- `tests/unit/`：不依赖运行中服务的单元与组件测试。
+- `tests/browser/`：使用隔离浏览器或本地模拟网站的测试。
+- `tests/integration/`：需要独立测试服务的端到端检查，按模块显式运行。
+- `browser-extension/`：独立采集扩展。
+- `CookieEditor-Collector/`：Cookie-Editor 收集版扩展。
+- `deploy/`：AutoDL 部署脚本与说明。
+- `docs/`：支持范围和历史验证记录。
+- `data/`、`sessions/`：运行数据，不提交 Git。
+
+验证命令（从仓库根目录，使用上述 Conda 环境）：
+
+```sh
+python -m unittest discover -s tests/unit -t .
+python -m unittest tests.browser.test_author_navigation tests.browser.test_author_discovery_browser
+```
+
+完整测试说明见 [tests/README.md](tests/README.md)。需要运行中服务的测试必须使用隔离数据目录，不能指向日常采集服务。
 
 ## 支持范围
 

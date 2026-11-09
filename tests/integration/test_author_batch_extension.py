@@ -9,8 +9,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 from storage import ROOT, session_path
-from test_author_batch import LIST, POST
-from test_wechat_capture import CHALLENGE
+from tests.unit.test_author_batch import LIST, POST
+from tests.unit.test_wechat_capture import CHALLENGE
 
 
 POST = '<meta name="author" content="元数据测试作者"><meta property="article:published_time" content="2026-11-05T09:00:00+08:00">' + POST

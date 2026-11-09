@@ -13,7 +13,7 @@ import author_pipeline
 
 class Pipeline(unittest.TestCase):
     def test_capture_continues_while_ocr_is_blocked(self):
-        from test_author_batch import LIST, POST
+        from tests.unit.test_author_batch import LIST, POST
         import rag_assets
         entered, release = threading.Event(), threading.Event()
         with tempfile.TemporaryDirectory() as temp:
