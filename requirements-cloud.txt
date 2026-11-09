@@ -5,3 +5,4 @@ uvicorn==0.53.0
 markdownify==1.2.3
 beautifulsoup4==4.15.0
 requests==2.34.2
+tldextract==5.3.2

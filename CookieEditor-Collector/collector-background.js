@@ -25,7 +25,7 @@ async function handle(m,s){
     const key='collector-pending:'+s.tab.id+':'+target.origin;
     let pending=(await chrome.storage.session.get(key))[key];
     if(!pending||pending.expires<Date.now()){
-      pending={id:crypto.randomUUID(),origin:target.origin,pattern,approval,tabId:s.tab.id,expires:Date.now()+600000};
+      pending={id:crypto.randomUUID(),origin:target.origin,localOrigin:page.origin,pattern,approval,tabId:s.tab.id,expires:Date.now()+600000};
       await chrome.storage.session.set({[key]:pending,['collector-request:'+pending.id]:pending});
     }
     if(!pending.opened||m.action==='authorize'){
@@ -45,7 +45,13 @@ async function handle(m,s){
   if(!selected.size)return {status:'empty',message:'未获取到本站 Cookie。请确认当前浏览器已登录，或使用手动导入。'};
   const response=await fetch(page.origin+'/api/cookies/import',{method:'POST',credentials:'omit',redirect:'error',headers:{'Content-Type':'application/json','X-Token':m.token},body:JSON.stringify({url:target.href,data:[...selected.values()]}),signal:AbortSignal.timeout(5000)});
   const result=await response.json();
-  if(!response.ok)return {status:'error',message:result.error||'本站 Cookie 保存失败。'};
+  if(!response.ok){
+    const message=result.error||'本站 Cookie 保存失败。';
+    const key='collector-pending:'+s.tab.id+':'+target.origin;
+    const pending=(await chrome.storage.session.get(key))[key];
+    if(pending)await chrome.storage.session.set({['collector-result:'+pending.id]:{error:message}});
+    return {status:'error',message};
+  }
   // Close only this request's extension-owned authorization window, after local save succeeds.
   const pendingKey='collector-pending:'+s.tab.id+':'+target.origin;
   const pending=(await chrome.storage.session.get(pendingKey))[pendingKey];
@@ -55,7 +61,7 @@ async function handle(m,s){
       const expected=chrome.runtime.getURL('collector-authorize.html')+'?request='+pending.id;
       if(window.type==='popup'&&window.tabs?.length===1&&window.tabs[0].url===expected){
         await chrome.windows.remove(pending.windowId);
-        await chrome.storage.session.remove([pendingKey,'collector-request:'+pending.id]);
+        await chrome.storage.session.remove([pendingKey,'collector-request:'+pending.id,'collector-result:'+pending.id]);
       }
     }catch{} // A user-closed window must not invalidate a successful import.
   }
