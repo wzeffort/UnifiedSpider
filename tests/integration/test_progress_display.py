@@ -4,6 +4,36 @@ from playwright.sync_api import sync_playwright, expect
 
 
 class ProgressDisplay(unittest.TestCase):
+    def test_new_author_can_start_while_old_output_is_queued(self):
+        task={'id':'old-output','source':{'platform':'xueqiu','owner':'123','url':'https://xueqiu.com/u/123'},
+              'created':'2026-11-09','state':'finished','phase':'capture','saved':1,'discovered':1,
+              'processed':1,'revision':1,'auto_after':True,'auto_state':'queued','message':'',
+              'enrichment':{'state':'idle'},'last_export':None}
+        with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True);page=browser.new_page();created=[]
+            def authors(route):
+                if route.request.method=='POST':
+                    created.append(route.request.post_data_json)
+                    route.fulfill(json={'id':'new-author'})
+                else:route.fulfill(json=[task])
+            page.route('**/api/authors',authors)
+            page.route('**/api/authors/new-author/control',lambda r:r.fulfill(json={'id':'new-author','state':'running'}))
+            page.route('**/api/jobs',lambda r:r.fulfill(json=[]))
+            page.route('**/api/result/old-output',lambda r:r.fulfill(json={'pages':[]}))
+            for state in ('recognizing','saving','queued'):
+                task['auto_state']=state
+                page.goto('http://127.0.0.1:18765/')
+                expect(page.locator('#authorStart')).to_be_enabled()
+                expect(page.locator('#authorOutputQueue')).to_be_visible()
+            page.evaluate("window.browserCookieBridge=async()=>({status:'connected',capabilities:['author-scan-v2']})")
+            page.locator('#authorUrls').fill('https://xueqiu.com/u/456')
+            page.locator('#authorStart').click()
+            expect(page.locator('#authorStart')).to_be_enabled()
+            self.assertEqual(len(created),1)
+            self.assertEqual(created[0]['url'],'https://xueqiu.com/u/456')
+            expect(page.locator('#authorOutputQueue')).to_contain_text('123')
+            browser.close()
+
     def test_stage_progress_buttons_and_disconnect(self):
         task = {'id': 'ui-stage', 'source': {'platform': 'xueqiu', 'owner': '123', 'url': 'https://xueqiu.com/u/123'},
                 'created': '2026-11-06', 'state': 'needs_user', 'phase': 'scan', 'saved': 0, 'discovered': 126,
@@ -39,7 +69,10 @@ class ProgressDisplay(unittest.TestCase):
             expect(summary).to_contain_text('正文采集当前未运行')
             expect(page.locator('[data-stage-progress]')).to_contain_text('图片已识别 1 / 2 张')
             expect(page.locator('#authorPauseAll')).to_be_disabled()
-            expect(page.locator('#authorStart')).to_be_disabled()
+            expect(page.locator('#authorStart')).to_be_enabled()
+            expect(page.locator('#authorUrls')).to_be_enabled()
+            expect(page.locator('#authorLimit')).to_be_enabled()
+            expect(page.locator('#authorOutputQueue')).to_contain_text('图片与导出队列')
             task.update(auto_state='done',enrichment={'state':'finished'},last_export={'documents_count':63,'revision':1,'folder':'D:/fixture'})
             page.reload()
             expect(summary).to_contain_text('当前没有任务运行')

@@ -8,10 +8,10 @@
   function controls(){
     const running=lastTasks.filter(t=>t.state==='running'), output=lastTasks.filter(outputRunning);
     const waiting=lastTasks.filter(t=>t.state==='needs_user');
-    const locked=starting||pausing||!connected||running.length>0||output.length>0||waiting.length>0;
+    const locked=starting||pausing||!connected||running.length>0||waiting.length>0;
     const start=document.getElementById('authorStart');
     start.disabled=locked;
-    start.textContent=starting?'正在启动任务…':!connected?'正在连接服务…':running.length?'正在跑任务…':output.length?'正在识别 / 保存…':waiting.length?'请先处理待继续任务':'开始批量收集';
+    start.textContent=starting?'正在启动任务…':!connected?'正在连接服务…':running.length?'正在跑任务…':waiting.length?'请先处理待继续任务':'开始批量收集';
     document.getElementById('authorPauseAll').disabled=pausing||!connected||!running.length;
     document.getElementById('authorPauseAll').textContent=pausing?'正在暂停…':'暂停正文采集';
     for(const id of ['authorUrls','authorScanMode','authorLimit','authorSaveMode','authorSaveFolder','authorChooseFolder','authorApplyFolder','authorAutoDownload'])document.getElementById(id).disabled=locked;
@@ -19,7 +19,7 @@
     overview.textContent=!connected?'连接中或连接中断，无法确认任务状态；请勿重复启动。':
       starting?'正在创建任务，请稍候…':
       running.length?`正在跑任务：${running.length} 个采集任务${output.length?'，图片识别同时进行':''}。`+(driving?'请保持本页打开。':'本页没有驱动采集；若其他工具页正在采集请保留，否则在任务下点击“在本页继续采集”。'):
-      output.length?`正在跑任务：${output.length} 个任务正在排队、识别图片或保存资料。正文采集当前未运行。`:
+      output.length?`正文采集当前未运行，可以开始新作者。后台有 ${output.length} 个图片或导出任务，继续独立处理，不占用正文采集。`:
       waiting.length?`当前未运行采集：${waiting.length} 个任务等待人工处理。请点击任务的“继续”，或“停止发现，下载已发现文章”；不要重复创建任务。`:
       lastTasks.some(t=>t.state==='paused')?'当前没有任务运行。已暂停的任务可在历史记录中继续。':'当前没有任务运行。';
     if(waiting.length&&(running.length||output.length))overview.textContent+=` 另有 ${waiting.length} 个任务等待人工处理。`;
@@ -145,6 +145,8 @@
       for(const el of panel.querySelectorAll('details[data-detail-id]')){if(el.open)opened.add(el.dataset.detailId);else opened.delete(el.dataset.detailId)}
       panel.replaceChildren();
       const active=tasks.filter(t=>['running','needs_user'].includes(t.state)||t.enrichment?.state==='running'||['queued','recognizing','saving','failed','partial'].includes(t.auto_state));
+      const capturing=active.filter(t=>['running','needs_user'].includes(t.state));
+      const background=active.filter(t=>!capturing.includes(t));
       const past=tasks.filter(t=>!active.includes(t)).sort((a,b)=>b.created.localeCompare(a.created));
       function render(task,parent,compact){
         const label=`${task.source.platform==='wechat'?'微信公众号':'雪球作者 '+task.source.owner} · ${labels[task.state]||task.state} · 正文已入库 ${task.saved} 篇 · 跳过 ${task.skipped_existing||0} 篇已有文章`;
@@ -197,8 +199,14 @@
         if(task.last_export){const location=document.createElement('p');location.className='hint';location.textContent='上次导出目录：'+task.last_export.folder;more.append(location);action('打开任务目录',()=>api('/api/authors/'+task.id+'/open-export',{}),more)}
         body.append(more);parent.append(row);
       }
-      if(!active.length){const empty=document.createElement('p');empty.className='hint';empty.textContent='暂无正在执行的任务。已保存资料和暂停的任务可在历史记录中查看。';panel.append(empty)}
-      active.forEach(t=>render(t,panel,false));
+      if(!capturing.length){const empty=document.createElement('p');empty.className='hint';empty.textContent='当前没有正文采集任务，可以开始采集新作者。历史任务与图片处理进度见下方。';panel.append(empty)}
+      capturing.forEach(t=>render(t,panel,false));
+      if(background.length){
+        const queue=document.createElement('section');queue.id='authorOutputQueue';
+        const title=document.createElement('h3');title.textContent='图片与导出队列（'+background.length+'）';
+        const note=document.createElement('p');note.className='hint';note.textContent='后台按队列识别图片并自动保存，不阻塞新作者采集。无需反复点击识别；暂停正文采集也不会停止此队列。';
+        queue.append(title,note);background.forEach(t=>render(t,queue,false));panel.append(queue);
+      }
       if(past.length){const history=details('history','历史任务（'+past.length+'）');history.id='authorHistory';past.slice(0,historyLimit).forEach(t=>render(t,history,true));if(past.length>historyLimit){const button=document.createElement('button');button.className='secondary';button.textContent='显示更多';button.onclick=()=>{historyLimit+=20;list()};history.append(button)}panel.append(history)}
       for(const task of tasks)if(task.auto_after&&['done','partial'].includes(task.auto_state)&&!task.last_export)await autoDownload(task);
       return tasks;
@@ -266,7 +274,7 @@
     }catch(e){status(e.message)}finally{driving=false;await list();if(resumeQueued&&!stopped){resumeQueued=false;drive()}}
   }
   document.getElementById('authorStart').onclick=async()=>{
-    if(starting||!connected||lastTasks.some(t=>t.state==='running'||t.state==='needs_user'||outputRunning(t)))return;
+    if(starting||!connected||lastTasks.some(t=>t.state==='running'||t.state==='needs_user'))return;
     starting=true;controls();
     try{
       const urls=[...new Set(document.getElementById('authorUrls').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean))];

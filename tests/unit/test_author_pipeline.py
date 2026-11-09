@@ -43,6 +43,13 @@ class Pipeline(unittest.TestCase):
                     self.assertEqual(task['saved'], 2)
                     self.assertEqual(task['state'], 'finished')
                     self.assertFalse(release.is_set())
+                    # A finished author's blocked OCR must not block a new author's capture.
+                    other = batch.control(batch.create({'url': 'https://xueqiu.com/u/456', 'limit': 1})['id'], 'resume')
+                    other = report(other, LIST, links=['https://xueqiu.com/456/1'])
+                    other = report(other, POST)
+                    self.assertEqual(other['saved'], 1)
+                    self.assertEqual(other['state'], 'finished')
+                    self.assertFalse(release.is_set())
                 finally:
                     release.set()
                     self.wait(task['id'])
