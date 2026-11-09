@@ -60,16 +60,7 @@ RAG 导入优先读取 `documents.jsonl`，使用 `document_id` 更新已有文�
 
 应用内部使用 SQLite 保存任务文章与查重记录，不是 MySQL，也不是向量数据库。向量化、分块及检索由下游 RAG 项目完成。
 
-## AutoDL
 
-已配置的云端爬虫监听 **8889**。在 VS Code Remote SSH 的端口面板转发 `8889`，本地端口也用 `8889`，然后打开 `http://127.0.0.1:8889/`。
-
-- 运行数据：`/root/autodl-tmp/unifiedspider/state/data`
-- 作者导出：`/root/autodl-tmp/unifiedspider/rag`
-- 图片处理：自部署 MinerU 与官方 API 两路分配不同图片，各一路并发，共享缓存。
-- 网页采集仍依赖本地浏览器与转发连接；图片处理和导出在服务器运行。
-
-具体部署脚本、依赖与密钥存放要求见 [deploy/AUTODL.md](deploy/AUTODL.md)。云端仅部署已提交的版本，密钥、Cookie、模型和用户资料不提交 Git。
 
 ## 项目结构
 
