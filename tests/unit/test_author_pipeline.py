@@ -85,6 +85,56 @@ class Pipeline(unittest.TestCase):
                 self.assertNotIn('error', doc['images'][0])
                 self.assertEqual(recognize.call_count, 2)
 
+    def test_round_robin_slices_export_text_first_and_reuse_ocr(self):
+        import hashlib
+        import os
+        entered, release = threading.Event(), threading.Event()
+        calls = []
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def recognize(path):
+                calls.append(path.read_text())
+                if len(calls) == 1:
+                    entered.set()
+                    self.assertTrue(release.wait(8))
+                return {'engine': 'mineru', 'text': 'recognized',
+                        'image_sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+            with patch('author_batch.job_folder', side_effect=lambda id: root/id), patch('download_settings.settings', return_value={'mode':'folder','folder':str(root/'out')}), patch('mineru_client.recognize', side_effect=recognize), patch.dict(os.environ, {'MINERU_MODE':'official'}):
+                tasks = []
+                for owner, size in [('123', 12), ('456', 1)]:
+                    task = batch.create({'url':'https://xueqiu.com/u/'+owner, 'auto_after':True})
+                    tasks.append(task)
+                    folder = root/task['id']
+                    (folder/'images').mkdir()
+                    images = []
+                    for i in range(size):
+                        name = f'{owner}-{i}'
+                        (folder/'images'/name).write_text(name)
+                        images.append({'url':'https://example.com/'+name,'file':'images/'+name})
+                    article_store.put(folder, {'url':f'https://xueqiu.com/{owner}/1','title':owner,'text':'body','markdown':'body','images':images})
+                first = batch.load(tasks[0]['id']);first.update(state='finished',phase='capture',cursor=1)
+                batch.persist(first)
+                try:
+                    self.assertTrue(entered.wait(3))
+                    exported = batch.load(first['id'])['last_export']
+                    self.assertTrue(Path(exported['documents_file']).exists())
+                    self.assertNotIn('recognized',Path(exported['documents_file']).read_text(encoding='utf-8'))
+                    second = batch.load(tasks[1]['id']);second.update(state='finished',phase='capture',cursor=1)
+                    batch.persist(second)
+                finally:
+                    release.set()
+                    for task in tasks:self.wait(task['id'])
+                self.assertLess(calls.index('456-0'), calls.index('123-4'))
+                self.assertEqual(len(calls),13)
+                # A new pass must use the stored OCR, without submitting it again.
+                batch.control(first['id'],'retry-output');self.wait(first['id'])
+                self.assertEqual(len(calls),13)
+                self.assertEqual(batch.load(first['id'])['auto_state'],'done')
+
+    def test_first_collection_maps_to_history(self):
+        self.assertEqual(batch.scan_mode({'scan_mode':'first'}),'history')
+        self.assertEqual(batch.scan_mode({'scan_mode':'incremental'}),'incremental')
+
     def wait(self, id):
         deadline = time.monotonic() + 10
         while id in author_pipeline.PENDING and time.monotonic() < deadline:

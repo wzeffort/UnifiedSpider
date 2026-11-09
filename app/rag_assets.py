@@ -116,9 +116,10 @@ def start(batch_id, ocr=False, pipeline=False):
     return status(folder)
 
 
-def run(batch_id, folder, engine, selected_pages=None):
+def run(batch_id, folder, engine, selected_pages=None, image_offset=0, max_images=None):
     import author_batch
-    done = failed = 0
+    done = failed = visited = attempted = 0
+    continuation = None
     try:
         target = folder / 'images'
         target.mkdir(exist_ok=True)
@@ -129,9 +130,23 @@ def run(batch_id, folder, engine, selected_pages=None):
         # thread has it open. Share the queue lock for this local snapshot.
         with author_batch.LOCK:
             reusable = reusable_images(batch_id, folder)
+        wait_deadline = time.monotonic() + 150
         for page in pages:
             pending=[]
             for index, item in enumerate(page.get('images', [])):
+                visited += 1
+                if visited <= image_offset:
+                    continue
+                existing = (folder / item.get('file', '')).resolve()
+                if (max_images is not None and engine == 'mineru' and not item.get('error')
+                        and existing.parent == target.resolve() and existing.is_file()
+                        and item.get('ocr', {}).get('engine') == 'mineru'
+                        and item['ocr'].get('image_sha256') == hashlib.sha256(existing.read_bytes()).hexdigest()):
+                    continue
+                if max_images is not None and attempted >= max_images:
+                    continuation = visited - 1
+                    break
+                attempted += 1
                 try:
                     item.pop('error', None)
                     if index >= 40 or time.monotonic() >= deadline:
@@ -179,10 +194,11 @@ def run(batch_id, folder, engine, selected_pages=None):
                     failed += 1
             for item,path,future in pending:
                 try:
-                    item['ocr']=future.result()
+                    item['ocr']=future.result(timeout=max(0, wait_deadline-time.monotonic()))
                     reusable[item['url']] = (path, copy.deepcopy(item))
                 except Exception as exc:
-                    item['error']=str(exc)[:200]
+                    future.cancel()  # Cancel queued work; an in-flight provider can still fill its hash cache.
+                    item['error']=(str(exc) or '图片识别等待超时，本轮跳过，可稍后重试')[:200]
                     failed+=1
             with author_batch.LOCK:
                 article_store.put(folder, page, replace=True)
@@ -190,8 +206,16 @@ def run(batch_id, folder, engine, selected_pages=None):
                     batch = author_batch.load(batch_id)
                     batch['revision'] += 1
                     author_batch.persist(batch)
+            if continuation is not None:
+                break
             done += 1
             save(folder / 'enrichment.json', {'state': 'running', 'done': done, 'total': len(pages), 'failed_images': failed})
+        if continuation is not None:
+            result = {'state': 'queued', 'done': done, 'next_image': continuation,
+                      'message': '本批图片已处理，轮到其他作者；稍后继续。'}
+            save(folder / 'enrichment.json', result)
+            return result
+        failed = sum(bool(item.get('error')) for page in pages for item in page.get('images', []))
         save(folder / 'enrichment.json', {'state': 'finished', 'done': done, 'failed_images': failed,
              'message': f'图片处理结束，{failed} 张图片未完成下载或 OCR；请重新保存资料包。'})
     except Exception as exc:
@@ -199,3 +223,5 @@ def run(batch_id, folder, engine, selected_pages=None):
     finally:
         with GUARD:
             ACTIVE.discard(str(folder))
+
+    return read(folder / "enrichment.json", {})

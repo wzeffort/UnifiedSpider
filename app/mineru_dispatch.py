@@ -27,7 +27,7 @@ def submit(path):
         lane='official' if official.get('batch_id') and not official.get('failed') else min(PENDING,key=PENDING.get)
         PENDING[lane]+=1
         fn=mineru_selfhost.recognize if lane=='local' else mineru_client.recognize_official
-        future=POOLS[lane].submit(fn,path,600)
+        future=POOLS[lane].submit(fn,path,120)
         INFLIGHT[digest]=future
         def complete(_):
             with LOCK:

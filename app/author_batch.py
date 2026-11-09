@@ -25,8 +25,10 @@ LOCK = threading.RLock()
 
 def scan_mode(config):
     mode = config.get('scan_mode', 'incremental')
+    if mode == 'first':
+        mode = 'history'  # First collection uses a full history scan, with the same deduplication.
     if mode not in ('incremental', 'history'):
-        raise ValueError('采集模式应为快速增量更新或补齐历史')
+        raise ValueError('请选择第一次采集、更新最新文章或补齐更早的历史文章')
     return mode
 
 

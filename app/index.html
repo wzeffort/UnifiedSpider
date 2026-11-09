@@ -10,8 +10,8 @@
 <section class="card" id="authorBatch"><h2>按作者批量下载</h2>
 <p class="hint">填写雪球作者主页或微信历史列表／合集网址，每行一个。自动跳过已有文章，遇到登录或验证时暂停。</p>
 <label for="authorUrls">作者／历史列表网址（最多 20 个）</label><textarea id="authorUrls" rows="3" placeholder="https://xueqiu.com/u/作者数字ID&#10;微信公众号历史列表或合集网址"></textarea>
-<label for="authorScanMode">采集模式</label><select id="authorScanMode"><option value="incremental" selected>快速增量更新（默认）</option><option value="history">补齐历史</option></select>
-<p class="hint">快速更新从作者最新列表开始，连续 3 批新遇到的链接、合计至少 30 篇均已入库时停止翻页；不会只因置顶旧帖就停止。补齐历史继续检查更早文章。快速更新不保证补齐历史漏采；请使用按最新排序的列表。</p>
+<label for="authorScanMode">采集模式</label><select id="authorScanMode"><option value="first">第一次采集这个作者</option><option value="incremental" selected>更新最新文章（采集过的作者）</option><option value="history">补齐更早的历史文章</option></select>
+<p class="hint">第一次采集：从最新文章往前收集。更新最新文章：只检查最近更新，遇到连续多批已采集文章后停止。补齐更早的历史文章：继续向前查找旧文章。三种方式都会跳过已有正文；采集范围受篇数上限和网站可访问内容限制。</p>
 <details id="authorSettings"><summary>保存位置与采集设置</summary><label for="authorLimit">本轮最多新增篇数（1–5000，旧文章不占额度）</label><input id="authorLimit" type="number" min="1" max="5000" value="500">
 <label for="authorSaveMode">保存方式</label><select id="authorSaveMode"><option value="folder">直接保存到本机文件夹（适合 RAG）</option><option value="browser">浏览器下载 ZIP</option></select>
 <label for="authorSaveFolder">本机文件夹路径</label><input id="authorSaveFolder" placeholder="粘贴完整路径，或点击选择文件夹">

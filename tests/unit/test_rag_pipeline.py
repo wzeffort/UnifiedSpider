@@ -14,6 +14,36 @@ from storage import save
 
 
 class RagPipeline(unittest.TestCase):
+    def test_timeout_persists_error_and_next_slice_continues(self):
+        import os
+        from concurrent.futures import Future, TimeoutError
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with patch('author_batch.job_folder', side_effect=lambda id: root/id), patch.dict(os.environ, {'MINERU_MODE':'hybrid'}):
+                task = author_batch.create({'url':'https://xueqiu.com/u/987'})
+                folder = root/task['id']; (folder/'images').mkdir()
+                images = []
+                for i in range(2):
+                    (folder/'images'/str(i)).write_bytes(bytes([i]))
+                    images.append({'url':f'https://example.com/{i}', 'file':f'images/{i}'})
+                page = {'url':'https://xueqiu.com/987/1','title':'测试','text':'正文','images':images}
+                article_store.put(folder,page)
+                slow = Mock();slow.result.side_effect = TimeoutError()
+                ready = Future();ready.set_result({'engine':'mineru','text':'second image'})
+                with patch('mineru_dispatch.submit',side_effect=[slow,ready]) as submit:
+                    first = rag_assets.run(task['id'],folder,'mineru',selected_pages=[page],max_images=1)
+                    self.assertEqual(first['state'],'queued', first)
+                    slow.cancel.assert_called_once()
+                    self.assertLessEqual(slow.result.call_args.kwargs['timeout'],150)
+                    stored = article_store.get(folder,page['url'])
+                    self.assertIn('超时',stored['images'][0]['error'])
+                    final = rag_assets.run(task['id'],folder,'mineru',selected_pages=[stored],image_offset=first['next_image'],max_images=1)
+                    self.assertEqual(final['state'],'finished')
+                    self.assertEqual(final['failed_images'],1)
+                    self.assertEqual(submit.call_count,2)
+                    self.assertEqual(article_store.get(folder,page['url'])['images'][1]['ocr']['text'],'second image')
+
     def test_legacy_migration_custom_rows_and_duplicate(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)

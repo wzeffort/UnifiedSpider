@@ -55,6 +55,7 @@
       label=task.last_export?'本轮已完成并导出':task.saved?'正文采集完成':'本轮检查完成，无新增正文';value=100;
       note=task.last_export?`本任务已导出 ${task.last_export.documents_count} 篇。`:task.saved?'请查看下方导出状态。':'没有启动图片识别或重复导出。';
     }
+    if(output&&task.enrichment?.state==='running'&&task.enrichment.message)note+=' 当前：'+task.enrichment.message;
     heading.textContent=label;detail.textContent=note;detail.className='hint';bar.setAttribute('aria-label',label);
     if(value!==undefined)bar.value=value;
     host.append(heading,bar,detail);
@@ -144,7 +145,7 @@
       const tasks=await api('/api/authors');lastTasks=tasks;connected=true;controls();
       for(const el of panel.querySelectorAll('details[data-detail-id]')){if(el.open)opened.add(el.dataset.detailId);else opened.delete(el.dataset.detailId)}
       panel.replaceChildren();
-      const active=tasks.filter(t=>['running','needs_user'].includes(t.state)||t.enrichment?.state==='running'||['queued','recognizing','saving','failed','partial'].includes(t.auto_state));
+      const active=tasks.filter(t=>['running','needs_user'].includes(t.state)||t.enrichment?.state==='running'||['queued','recognizing','saving'].includes(t.auto_state));
       const capturing=active.filter(t=>['running','needs_user'].includes(t.state));
       const background=active.filter(t=>!capturing.includes(t));
       const past=tasks.filter(t=>!active.includes(t)).sort((a,b)=>b.created.localeCompare(a.created));

@@ -115,7 +115,7 @@ def decode_result(data):
 def recognize(path, timeout=120):
     if os.environ.get('MINERU_SELF_HOSTED_URL'):
         from mineru_selfhost import recognize as local_recognize
-        return local_recognize(path, timeout=max(timeout,600))
+        return local_recognize(path, timeout=timeout)
     return recognize_official(path,timeout)
 
 

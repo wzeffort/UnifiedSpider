@@ -1,11 +1,45 @@
 """Serialized, durable post-capture OCR and export orchestration."""
+from collections import OrderedDict, deque
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 from storage import save
 
-POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix='author-output')
+class FairPool:
+    """One slice at a time, rotating authors instead of draining one author's backlog."""
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.queues = OrderedDict()
+        self.running = False
+        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='author-output')
+
+    def submit(self, fn, batch_id, *args):
+        with self.lock:
+            self.queues.setdefault(batch_id, deque()).append((fn, args))
+            if not self.running:
+                self.running = True
+                self.executor.submit(self.drain)
+
+    def drain(self):
+        while True:
+            with self.lock:
+                if not self.queues:
+                    self.running = False
+                    return
+                batch_id, jobs = self.queues.popitem(last=False)
+                fn, args = jobs.popleft()
+                if jobs:
+                    self.queues[batch_id] = jobs
+            try:
+                fn(batch_id, *args)
+            except Exception:
+                logging.getLogger(__name__).exception('Author output slice failed')
+
+
+POOL = FairPool()
+SLICE_IMAGES = 4
 PENDING = set()
 GUARD = threading.Lock()
 STREAMING = set()
@@ -20,13 +54,16 @@ def enqueue_article(batch_id, url):
         POOL.submit(recognize_article, batch_id, url)
 
 
-def recognize_article(batch_id, url):
+def recognize_article(batch_id, url, offset=0):
     import author_batch as batch
     import article_store
     import rag_assets
     folder = batch.job_folder(batch_id)
     acquired = False
+    again = False
     try:
+        if batch_id in PENDING:
+            return  # The final pass owns all remaining images for this author.
         while True:
             with batch.LOCK:
                 if batch.load(batch_id)['state']=='cancelled':
@@ -40,13 +77,18 @@ def recognize_article(batch_id, url):
         page = article_store.get(folder, url)
         if page:
             # No queue revision changes: OCR completion must not invalidate a browser reply.
-            rag_assets.run(batch_id, folder, 'mineru', selected_pages=[page])
+            result = rag_assets.run(batch_id, folder, 'mineru', selected_pages=[page],
+                                    image_offset=offset, max_images=SLICE_IMAGES)
+            if result.get('state') == 'queued':
+                again = True
+                POOL.submit(recognize_article, batch_id, url, result['next_image'])
     finally:
         if acquired:
             with rag_assets.GUARD:
                 rag_assets.ACTIVE.discard(str(folder))
-        with GUARD:
-            STREAMING.discard((batch_id, url))
+        if not again:
+            with GUARD:
+                STREAMING.discard((batch_id, url))
 
 
 def enqueue(data):
@@ -69,38 +111,52 @@ def update(batch_id, state, message):
         return data
 
 
-def run(batch_id):
+def run(batch_id, offset=0):
     import author_batch as batch
     import rag_assets
+    again = False
+    folder = batch.job_folder(batch_id)
     try:
-        update(batch_id, 'recognizing', '正在自动下载并识别正文图片。')
-        # The shared image worker is deliberately serial to limit API concurrency.
-        while True:
-            try:
-                rag_assets.start(batch_id, ocr=True, pipeline=True)
-                break
-            except ValueError:
-                if not rag_assets.ACTIVE:
-                    raise
-                time.sleep(1)
-        folder = batch.job_folder(batch_id)
-        while str(folder) in rag_assets.ACTIVE:
+        # Export the current text before waiting for external OCR. Each subsequent
+        # slice merges its new results into the same author's directory.
+        if rag_assets.ACTIVE:
+            again = True
+            POOL.submit(run, batch_id, offset)
             time.sleep(.25)
-        result = rag_assets.status(folder)
-        if result['state'] != 'finished':
+            return
+        data = batch.load(batch_id)
+        if offset == 0 and data['output_settings']['mode'] == 'folder':
+            batch.save_to_folder(batch_id, data['output_settings'])
+        with rag_assets.GUARD:
+            if rag_assets.ACTIVE:
+                again = True
+                POOL.submit(run, batch_id, offset)
+                time.sleep(.25)
+                return
+            rag_assets.ACTIVE.add(str(folder))
+        update(batch_id, 'recognizing', '正在分批识别图片；正文已可使用。')
+        result = rag_assets.run(batch_id, folder, 'mineru',
+                                image_offset=offset, max_images=SLICE_IMAGES)
+        if result['state'] not in ('queued', 'finished'):
             raise ValueError(result.get('message', '图片处理未完成'))
-        data = update(batch_id, 'saving', '图片处理结束，正在自动保存资料。')
+        data = update(batch_id, 'saving', '正在将本批识别结果更新到作者目录。')
         if data['output_settings']['mode'] == 'folder':
             batch.save_to_folder(batch_id, data['output_settings'])
-        failed = result.get('failed_images', 0)
-        update(batch_id, 'partial' if failed else 'done',
-               f'资料已处理；{failed} 张图片未识别成功，可重试识别并重新保存。' if failed else
-               ('已自动识别并保存到所选目录。' if data['output_settings']['mode'] == 'folder' else '识别完成，等待浏览器下载资料包。'))
+        if result['state'] == 'queued':
+            update(batch_id, 'queued', '正文和已识别图片已保存，剩余图片排队继续。')
+            again = True
+            POOL.submit(run, batch_id, result['next_image'])
+        else:
+            failed = result.get('failed_images', 0)
+            update(batch_id, 'partial' if failed else 'done',
+                   f'资料已保存；{failed} 张图片失败或超时，可稍后重试。' if failed else
+                   ('已自动识别并保存到所选目录。' if data['output_settings']['mode'] == 'folder' else '识别完成，等待浏览器下载资料包。'))
     except Exception as exc:
-        update(batch_id, 'failed', '自动处理未完成：' + str(exc)[:200] + '。可重试识别并保存。')
+        update(batch_id, 'failed', '自动处理未完成：' + str(exc)[:200] + '。已有正文和识别结果保留，可重试。')
     finally:
-        with GUARD:
-            PENDING.discard(batch_id)
+        if not again:
+            with GUARD:
+                PENDING.discard(batch_id)
 
 
 def enqueue_cancelled(data):
