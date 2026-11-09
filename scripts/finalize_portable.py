@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 stage = Path(sys.argv[1]).resolve()
-assert stage.parent == Path(__file__).resolve().parent.parent / 'releases'
+assert stage.parent == Path(__file__).resolve().parents[2] / 'releases'
 assert not any((stage / 'app' / name).exists() for name in ('data', 'sessions', 'browser_profiles'))
 manifest = {p.relative_to(stage).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in stage.rglob('*') if p.is_file() and p.name != 'manifest.json'}

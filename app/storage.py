@@ -6,7 +6,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
-STATE_ROOT = Path(os.environ.get('SPIDER_STATE_ROOT', str(ROOT))).expanduser().resolve()
+PROJECT_ROOT = ROOT.parent if (ROOT.parent / 'config').is_dir() else ROOT
+STATE_ROOT = Path(os.environ.get('SPIDER_STATE_ROOT', str(PROJECT_ROOT))).expanduser().resolve()
 DATA = STATE_ROOT / 'data'
 SESSIONS = STATE_ROOT / 'sessions'
 PROFILES = STATE_ROOT / 'browser_profiles'

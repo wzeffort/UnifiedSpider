@@ -3,7 +3,7 @@ sessions/
 browser_profiles/
 __pycache__/
 *.png
-!CookieEditor-Collector/**/*.png
+!app/CookieEditor-Collector/**/*.png
 .env
 .env.*
 *.pem

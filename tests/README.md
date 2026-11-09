@@ -38,7 +38,7 @@ PowerShell 示例，两个终端均先设置同一路径：
 $env:SPIDER_STATE_ROOT = Join-Path $env:TEMP 'unifiedspider-integration'
 $env:SPIDER_PORT = '18765'
 # 第一个终端
-python app.py --no-browser
+python app/app.py --no-browser
 # 第二个终端，设置上述环境变量后
 python -m tests.integration.test_cookie_editor_bridge
 ```

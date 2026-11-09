@@ -10,8 +10,8 @@ import author_batch as batch
 
 class Discovery(unittest.TestCase):
     def test_real_scanner_pagination_scrolling_and_slow_load(self):
-        code = Path('browser-extension/author-batch.js').read_text(encoding='utf-8')
-        self.assertEqual(code, Path('CookieEditor-Collector/author-batch.js').read_text(encoding='utf-8'))
+        code = Path('app/browser-extension/author-batch.js').read_text(encoding='utf-8')
+        self.assertEqual(code, Path('app/CookieEditor-Collector/author-batch.js').read_text(encoding='utf-8'))
         start = code.index('func:phase=>{') + len('func:phase=>{')
         scanner = '(phase)=>{' + code[start:code.index('  }});', start)] + '}'
         with tempfile.TemporaryDirectory() as temp, patch('author_batch.job_folder', side_effect=lambda id: Path(temp) / id), patch('author_batch.time.time', return_value=2_000_000_000) as clock, sync_playwright() as p:

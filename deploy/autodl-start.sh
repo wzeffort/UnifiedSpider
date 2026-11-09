@@ -13,7 +13,7 @@ export MINERU_API_TOKEN_FILE="$base/secrets/mineru-api-token"
 export SPIDER_PORT=8889
 mkdir -p "$base/logs" "$SPIDER_STATE_ROOT/data" "$base/rag" "$MINERU_HOME"
 if [ ! -d "$base/venv" ]; then /root/miniconda3/bin/python -m venv "$base/venv"; fi
-"$base/venv/bin/python" -m pip install -r "$release/requirements-cloud.txt"
+"$base/venv/bin/python" -m pip install -r "$release/config/requirements-cloud.txt"
 if [ ! -e "$MINERU_HOME/models" ]; then
   ln -s /root/autodl-tmp/AIfinance/runtime/mineru4-home/models "$MINERU_HOME/models"
 fi
@@ -29,5 +29,5 @@ fi
 if tmux has-session -t unifiedspider-web 2>/dev/null; then
   echo 'Web service already exists; not restarting an existing service.'; exit 1
 fi
-tmux new-session -d -s unifiedspider-web "cd '$release'; export PYTHONDONTWRITEBYTECODE=1 SPIDER_STATE_ROOT='$SPIDER_STATE_ROOT' MINERU_SELF_HOSTED_URL='$MINERU_SELF_HOSTED_URL' MINERU_SELF_HOSTED_TIER=standard MINERU_MODE=hybrid MINERU_API_TOKEN_FILE='$MINERU_API_TOKEN_FILE' SPIDER_PORT=8889; '$base/venv/bin/python' app.py --no-browser >> '$base/logs/web.log' 2>&1"
+tmux new-session -d -s unifiedspider-web "cd '$release'; export PYTHONDONTWRITEBYTECODE=1 SPIDER_STATE_ROOT='$SPIDER_STATE_ROOT' MINERU_SELF_HOSTED_URL='$MINERU_SELF_HOSTED_URL' MINERU_SELF_HOSTED_TIER=standard MINERU_MODE=hybrid MINERU_API_TOKEN_FILE='$MINERU_API_TOKEN_FILE' SPIDER_PORT=8889; '$base/venv/bin/python' app/app.py --no-browser >> '$base/logs/web.log' 2>&1"
 echo "Started committed release: $release"

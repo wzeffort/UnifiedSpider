@@ -6,8 +6,8 @@ from playwright.sync_api import sync_playwright
 
 class Navigation(unittest.TestCase):
     def test_navigation_guards(self):
-        code=Path('browser-extension/author-batch.js').read_text(encoding='utf-8')
-        self.assertEqual(code,Path('CookieEditor-Collector/author-batch.js').read_text(encoding='utf-8'))
+        code=Path('app/browser-extension/author-batch.js').read_text(encoding='utf-8')
+        self.assertEqual(code,Path('app/CookieEditor-Collector/author-batch.js').read_text(encoding='utf-8'))
         with sync_playwright() as p:
             browser=p.chromium.launch(headless=True)
             page=browser.new_page()

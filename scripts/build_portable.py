@@ -7,22 +7,24 @@ import zipfile
 from pathlib import Path
 import conda_pack
 
-ROOT = Path(__file__).resolve().parent
-OUTPUT = ROOT.parent / 'releases'
+PROJECT = Path(__file__).resolve().parent.parent
+ROOT = PROJECT / 'app'
+OUTPUT = PROJECT.parent / 'releases'
 OUTPUT.mkdir(exist_ok=True)
 stamp = time.strftime('%Y%m%d-%H%M%S')
 stage = OUTPUT / ('WebCollector-Windows-x64-' + stamp)
 stage.mkdir()
 (stage / 'app').mkdir()
-files = ['app.py', 'author_batch.py', 'author_pipeline.py', 'article_store.py', 'article_metadata.py', 'rag_assets.py', 'mineru_client.py', 'author_batch_ui.js', 'download_settings.py', 'choose_download_folder.py', 'content.py', 'cookie_state.py', 'core.py', 'document_view.py', 'export_names.py',
-         'image_assets.py', 'index.html', 'jobs.py', 'launcher.py', 'scrapy_fetch.py', 'session_worker.py',
-         'site_access.py', 'storage.py', 'worker.py', 'requirements.txt', 'portable_check.py']
+files = [p.name for p in ROOT.glob('*.py')] + ['index.html', 'browser_bridge.js', 'author_batch_ui.js']
 for name in files:
     shutil.copy2(ROOT / name, stage / 'app' / name)
-shutil.copy2(ROOT / 'portable-start.bat', stage / '启动.bat')
-shutil.copy2(ROOT / 'portable-start.bat', stage / 'start.bat')
-shutil.copy2(ROOT / 'bootstrap.ps1', stage / 'bootstrap.ps1')
-shutil.copy2(ROOT / 'portable-readme.txt', stage / '使用说明.txt')
+for name in ('browser-extension', 'CookieEditor-Collector'):
+    shutil.copytree(ROOT / name, stage / 'app' / name, ignore=shutil.ignore_patterns('__pycache__', 'node_modules', '.git'))
+shutil.copy2(PROJECT / 'config' / 'requirements.txt', stage / 'app' / 'requirements.txt')
+shutil.copy2(PROJECT / 'scripts' / 'portable-start.bat', stage / '启动.bat')
+shutil.copy2(PROJECT / 'scripts' / 'portable-start.bat', stage / 'start.bat')
+shutil.copy2(PROJECT / 'scripts' / 'bootstrap.ps1', stage / 'bootstrap.ps1')
+shutil.copy2(PROJECT / 'docs' / 'portable-readme.txt', stage / '使用说明.txt')
 print('Packing Python environment...', flush=True)
 env = conda_pack.CondaEnv.from_prefix(r'D:\Anaconda\envs\spider-crawl4ai', ignore_editable_packages=True)
 env = env.exclude('Lib/site-packages/__editable__*').exclude('Lib/site-packages/crawl4ai-*.dist-info/direct_url.json')
@@ -30,9 +32,9 @@ env.pack(output=str(stage / 'runtime.zip'), format='zip', compress_level=2)
 # The development install points outside the environment. Vendor its actual
 # source instead of shipping a .pth that points to the developer's drive.
 with zipfile.ZipFile(stage / 'runtime.zip', 'a', zipfile.ZIP_DEFLATED, compresslevel=2) as runtime:
-    for path in (ROOT.parent / 'Crawl4AI' / 'crawl4ai').rglob('*'):
+    for path in (PROJECT.parent / 'Crawl4AI' / 'crawl4ai').rglob('*'):
         if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc':
-            runtime.write(path, 'Lib/site-packages/crawl4ai/' + path.relative_to(ROOT.parent / 'Crawl4AI' / 'crawl4ai').as_posix())
+            runtime.write(path, 'Lib/site-packages/crawl4ai/' + path.relative_to(PROJECT.parent / 'Crawl4AI' / 'crawl4ai').as_posix())
 browser_root = Path(r'C:\Users\Administrator\AppData\Local\ms-playwright')
 for name in ('chromium-1234', 'chromium_headless_shell-1234', 'ffmpeg-1011', 'winldd-1007'):
     shutil.copytree(browser_root / name, stage / 'browsers' / name)

@@ -15,7 +15,7 @@ except (OSError, ValueError):
     missing = [name for name in ('fastapi', 'uvicorn', 'scrapy', 'crawl4ai', 'playwright', 'markdownify') if importlib.util.find_spec(name) is None]
     if missing:
         print('Missing dependencies: ' + ', '.join(missing))
-        print('Run install.bat once, then start.bat. Startup does not install packages automatically.')
+        print('Run scripts/install.bat once, then start.bat. Startup does not install packages automatically.')
         sys.exit(1)
     sys.exit(subprocess.call([sys.executable, str(Path(__file__).with_name('app.py'))]))
 else:
