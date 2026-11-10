@@ -26,11 +26,15 @@ def extract_account_name(markup, source):
     return None
 
 
-def extract_metadata(markup):
+def extract_metadata(markup, source_url=None):
     soup = BeautifulSoup(markup, 'html.parser')
     author = soup.select_one('meta[name="author"], #js_name, .rich_media_meta_nickname, .author-name, .user-name')
     date = soup.select_one('meta[property="article:published_time"], time[datetime], #publish_time')
     name = (author.get('content') or author.get_text(' ', strip=True)) if author else None
+    page = urlsplit(source_url or '')
+    if page.hostname in ('xueqiu.com','www.xueqiu.com'):
+        identity = re.fullmatch(r'/(\d+)/(\d+)/?',page.path)
+        name = extract_account_name(markup, {'platform':'xueqiu','owner':identity[1]}) if identity else None
     raw = (date.get('content') or date.get('datetime') or date.get_text(' ', strip=True)) if date else None
     normalized = None
     if raw:

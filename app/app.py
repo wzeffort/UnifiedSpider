@@ -338,7 +338,7 @@ def save_browser_page(config: dict):
     if not record['text'].strip():
         raise ValueError('当前标签页没有可保存的正文')
     from article_metadata import extract_metadata
-    record.update(extract_metadata(markup))
+    record.update(extract_metadata(markup, url))
     record['notes'].append('直接保存浏览器当前页面；图片保留原链接，未下载图片。')
     job_id = str(uuid.uuid4())
     folder = job_folder(job_id)

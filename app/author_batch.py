@@ -371,7 +371,7 @@ def report(batch_id, payload):
             else:
                 record['notes'].append('作者批量采集：仅保存浏览器可见正文，图片保留原链接。')
                 record['captured_at'] = datetime.now(timezone.utc).isoformat()
-                record.update(extract_metadata(markup))
+                record.update(extract_metadata(markup, current))
                 article_store.put(job_folder(batch_id), record)
                 data.update(article_retry=0,consecutive_failures=0)
                 if data.get('auto_after'):
