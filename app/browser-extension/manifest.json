@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "网页资料收集助手 · 本机连接",
-  "version": "1.5.7",
+  "version": "1.5.8",
   "description": "经您授权后，只将当前采集网址适用的 Cookie 发送给本机资料收集助手。",
   "permissions": [
     "cookies",

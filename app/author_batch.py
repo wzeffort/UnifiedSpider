@@ -141,6 +141,42 @@ def previously_saved(source, batch_id):
     return found
 
 
+def already_saved(source, batch_id, url):
+    candidates = {url}
+    if source['platform'] == 'xueqiu':
+        candidates |= {url.replace('://www.xueqiu.com/', '://xueqiu.com/'),
+                       url.replace('://xueqiu.com/', '://www.xueqiu.com/')}
+    for path in job_folder(batch_id).parent.glob('*/author-batch.json'):
+        if path.parent.name == batch_id:
+            continue
+        old = read(path, {}).get('source', {})
+        if old.get('platform') != source['platform']:
+            continue
+        if source['platform'] == 'xueqiu' and old.get('owner') != source['owner']:
+            continue
+        if article_store.contains_any(path.parent, candidates):
+            return True
+    return False
+
+
+def claim(batch_id, worker):
+    worker = str(uuid.UUID(worker))
+    with LOCK:
+        data = load(batch_id)
+        path = job_folder(batch_id)/'capture-lease.json'
+        lease = read(path, {})
+        if lease.get('expires', 0) > time.time() and lease.get('worker') != worker:
+            return {'status': 'busy', 'retry_after_ms': 3000,
+                    'message': '另一个工具页正在采集此任务，本页等待，避免重复下载。'}
+        if data['state'] != 'running':
+            return {'status': 'batch', 'batch': public(data)}
+        if lease.get('worker') != worker or lease.get('expires', 0) <= time.time():
+            lease = {'worker': worker, 'id': str(uuid.uuid4())}
+        lease['expires'] = time.time()+60
+        save(path, lease)
+        return {'status': 'claimed', 'lease': lease['id'], 'batch': public(data)}
+
+
 def persist(data):
     folder = job_folder(data['id'])
     save(folder / 'author-batch.json', data)
@@ -160,11 +196,12 @@ def public(data):
     return {**{k: data[k] for k in ('id', 'source', 'created', 'state', 'phase', 'revision', 'limit', 'message')},
         'skipped_existing': len(data.get('skipped_urls', [])), 'discovered': len(data['urls']), 'saved': saved_count, 'processed': index,
         'url': data['source']['url'] if data['phase'] == 'scan' else (data['urls'][index] if index < len(data['urls']) else ''),
-        'not_before': data['not_before'], 'last_export': data.get('last_export'),
+        'not_before': data['not_before'], 'last_export': ({k: v for k, v in data['last_export'].items() if k != 'files_sha256'} if data.get('last_export') else None),
         'output_mode': data.get('output_settings', {}).get('mode'), 'discovery_reason': data.get('discovery_reason'),
         'scan_mode': data.get('scan_mode', 'history'), 'history_complete': data.get('history_complete', False),
         'article_retry': data.get('article_retry',0),
         'article_retry_supported': True,
+        'capture_claim_supported': True,
         'auto_after': data.get('auto_after', False), 'auto_state': data.get('auto_state'), 'auto_message': data.get('auto_message', ''),
         'enrichment': rag_assets.status(job_folder(data['id']))}
 
@@ -201,6 +238,7 @@ def control(batch_id, action):
             raise ValueError('图片正在处理，请等待完成后继续采集')
         if action not in ('pause', 'resume', 'finish-scan', 'skip', 'rescan', 'retry-output', 'cancel'):
             raise ValueError('不支持的操作')
+        save(job_folder(batch_id)/'capture-lease.json', {})
         if action == 'cancel':
             if data['state'] != 'cancelled':
                 data.update(state='cancelled', auto_after=False, auto_state=None,
@@ -244,6 +282,10 @@ def report(batch_id, payload):
         data = load(batch_id)
         if data['state'] != 'running' or payload.get('revision') != data['revision']:
             return public(data)  # A paused, duplicate or obsolete browser reply cannot advance the queue.
+        lease = read(job_folder(batch_id)/'capture-lease.json', {})
+        if payload.get('capture_lease') or lease.get('expires', 0) > time.time():
+            if payload.get('capture_lease') != lease.get('id') or lease.get('expires', 0) <= time.time():
+                raise ValueError('此页面的任务领取已失效，请在当前采集工具页继续；未保存重复正文')
         if time.time() < data['not_before']:
             return public(data)
         markup = payload.get('html', '')
@@ -312,7 +354,7 @@ def report(batch_id, payload):
             elif data['stagnant'] >= 30 or data['rounds'] >= 2000:
                 data.update(state='needs_user', message='列表长时间未加载出新内容，尚未确认到达末尾。请检查采集标签页后继续，或选择停止发现并保存已找到文章。')
         else:
-            if current in previously_saved(data['source'], batch_id):
+            if already_saved(data['source'], batch_id, current):
                 data['skipped_urls'] = sorted(set(data.get('skipped_urls', [])) | {current})
                 data['cursor'] += 1
                 if data['cursor'] >= len(data['urls']):

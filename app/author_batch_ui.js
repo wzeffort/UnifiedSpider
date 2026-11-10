@@ -2,6 +2,7 @@
   const panel=document.getElementById('authorTasks');
   const monitor=new URLSearchParams(location.search).get('view')==='progress';
   let driving=false, stopped=false, resumeQueued=false, starting=false, pausing=false, connected=false;
+  let driverError='';
   const overview=document.createElement('div');overview.id='authorOverview';overview.className='status';overview.setAttribute('role','status');
   panel.before(overview);
   const outputRunning=t=>t.enrichment?.state==='running'||['queued','recognizing','saving'].includes(t.auto_state);
@@ -11,18 +12,19 @@
     const locked=starting||pausing||!connected||running.length>0||waiting.length>0;
     const start=document.getElementById('authorStart');
     start.disabled=locked;
-    start.textContent=starting?'正在启动任务…':!connected?'正在连接服务…':running.length?'正在跑任务…':waiting.length?'请先处理待继续任务':'开始批量收集';
+    start.textContent=starting?'正在启动任务…':!connected?'正在连接服务…':running.length?(driving?'正在采集…':'请在任务中继续采集'):waiting.length?'请先处理待继续任务':'开始批量收集';
     document.getElementById('authorPauseAll').disabled=pausing||!connected||!running.length;
     document.getElementById('authorPauseAll').textContent=pausing?'正在暂停…':'暂停正文采集';
     for(const id of ['authorUrls','authorScanMode','authorLimit','authorSaveMode','authorSaveFolder','authorChooseFolder','authorApplyFolder','authorAutoDownload'])document.getElementById(id).disabled=locked;
     overview.style.borderLeft='5px solid '+(!connected||waiting.length?'#c87b16':running.length||output.length?'#087f8c':'#708090');
     overview.textContent=!connected?'连接中或连接中断，无法确认任务状态；请勿重复启动。':
       starting?'正在创建任务，请稍候…':
-      running.length?`正在跑任务：${running.length} 个采集任务${output.length?'，图片识别同时进行':''}。`+(driving?'请保持本页打开。':'本页没有驱动采集；若其他工具页正在采集请保留，否则在任务下点击“在本页继续采集”。'):
+      running.length?(driving?`本页正在驱动 ${running.length} 个采集任务，请保持本页打开。`:`后台有 ${running.length} 个未完成任务，但本页未执行采集。若其他工具页也没有采集，请点击“在本页继续采集”；仅刷新或查看进度不会自动继续。`):
       output.length?`正文采集当前未运行，可以开始新作者。后台有 ${output.length} 个图片或导出任务，继续独立处理，不占用正文采集。`:
       waiting.length?`当前未运行采集：${waiting.length} 个任务等待人工处理。请点击任务的“继续”，或“停止发现，下载已发现文章”；不要重复创建任务。`:
       lastTasks.some(t=>t.state==='paused')?'当前没有任务运行。已暂停的任务可在历史记录中继续。':'当前没有任务运行。';
     if(waiting.length&&(running.length||output.length))overview.textContent+=` 另有 ${waiting.length} 个任务等待人工处理。`;
+    if(driverError)overview.textContent+=' 本页采集循环已停止，原因：'+driverError+'。已保存数据保留。';
   }
   function taskProgress(task,host){
     host.replaceChildren();
@@ -33,7 +35,7 @@
     if(task.state==='cancelled'){
       label=output?'已停止采集 · 正在自动保存已有资料':'已取消任务 · 已采集数据保留';if(!output)value=0;note=output?'等待当前图片处理收尾，再合并到作者目录。':'不会继续采集；新任务会跳过已入库文章。';
     }else if(task.state!=='finished'){
-      const prefix=active?'正在采集':task.state==='needs_user'?'已暂停，等待人工处理':'已暂停';
+      const prefix=active?(driving?'正在采集':'任务未完成 · 本页未执行采集'):task.state==='needs_user'?'已暂停，等待人工处理':'已暂停';
       if(task.phase==='scan'){
         label=prefix+' · 查找文章';note=`已发现 ${task.discovered} 篇待采集，跳过 ${task.skipped_existing||0} 篇旧文。历史总量未知，不显示虚假百分比。`;
         if(!active)value=0;
@@ -106,12 +108,7 @@
     const previous=imageMetrics.get(task.id);
     if(previous?.loading||Date.now()-(previous?.at||0)<30000)return;
     imageMetrics.set(task.id,{...previous,loading:true,at:Date.now()});
-    api('/api/result/'+task.id).then(result=>{
-      const c={total:0,complete:0,pending:0,failed:0,downloaded:0,pages:result.pages.length,pagesWithImages:0,pagesComplete:0};
-      for(const page of result.pages){const images=page.images||[];if(images.length)c.pagesWithImages++;
-        if(images.length&&images.every(i=>i.ocr&&!i.error))c.pagesComplete++;
-        for(const image of images){c.total++;if(image.file)c.downloaded++;if(image.error)c.failed++;else if(image.ocr)c.complete++;else c.pending++}
-      }
+    api('/api/authors/'+task.id+'/image-counts').then(c=>{
       imageMetrics.set(task.id,{counts:c,at:Date.now(),time:new Date().toLocaleTimeString(),loading:false});
     }).catch(()=>imageMetrics.set(task.id,{...previous,at:Date.now(),loading:false,error:true})).finally(()=>{
       const current=panel.querySelector('[data-task-id="'+task.id+'"] [data-image-progress]');
@@ -150,12 +147,14 @@
       const background=active.filter(t=>!capturing.includes(t));
       const past=tasks.filter(t=>!active.includes(t)).sort((a,b)=>b.created.localeCompare(a.created));
       function render(task,parent,compact){
-        const label=`${task.source.platform==='wechat'?'微信公众号':'雪球作者 '+task.source.owner} · ${labels[task.state]||task.state} · 正文已入库 ${task.saved} 篇 · 跳过 ${task.skipped_existing||0} 篇已有文章`;
+        const label=`${task.source.platform==='wechat'?'微信公众号':'雪球作者 '+task.source.owner} · ${task.state==='running'&&!driving?'未完成（本页未执行采集）':labels[task.state]||task.state} · 正文已入库 ${task.saved} 篇 · 跳过 ${task.skipped_existing||0} 篇已有文章`;
         const row=compact?details(task.id,label):document.createElement('div');row.className='job';row.dataset.taskId=task.id;
         if(!compact){const title=document.createElement('strong');title.textContent=label;row.append(title)}
         const body=document.createElement('div');row.append(body);
         const progress=document.createElement('div');progress.dataset.stageProgress='';taskProgress(task,progress);body.append(progress);
-        const description=document.createElement('p');description.className='hint';description.textContent=String(task.message||'').replace(/已保存 (\d+) 篇/g,'正文已入库 $1 篇')+(task.discovery_reason?'（'+task.discovery_reason+'）':'');body.append(description);
+        const description=document.createElement('p');description.className='hint';
+        const discovery=task.discovery_reason==='达到设置上限'?`链接发现阶段已达到本轮上限，共找到 ${task.discovered} 个链接；正文已处理 ${task.processed||0} 个，剩余 ${Math.max(0,task.discovered-(task.processed||0))} 个待处理。这不是正文暂停原因。`:task.discovery_reason;
+        description.textContent=(task.state==='running'&&!driving?'上次任务消息：':'')+String(task.message||'').replace(/已保存 (\d+) 篇/g,'正文已入库 $1 篇')+(discovery?'（'+discovery+'）':'');body.append(description);
         const stored=document.createElement('p');stored.className='hint';stored.textContent=`正文已入库：${task.saved} 篇 / 本轮发现 ${task.discovered} 篇；跳过 ${task.skipped_existing||0} 篇已有文章。入库位置是本机数据库。`;body.append(stored);
         const imageProgress=document.createElement('p');imageProgress.className='hint';imageProgress.dataset.imageProgress='';body.append(imageProgress);
         if(!compact||opened.has(task.id))renderMetrics(task,imageProgress);else imageProgress.textContent='图片识别：展开任务后读取累计进度。';
@@ -252,10 +251,14 @@
   });
   async function drive(){
     if(driving){resumeQueued=true;return}driving=true;
+    driverError='';
     try{
       const bridge=await browserCookieBridge('ping');
+      let refreshedAt=0;
       while(!stopped){
-        const tasks=await list(), next=tasks.find(t=>t.state==='running');
+        // Browser readiness can be polled quickly without rebuilding every task row.
+        if(Date.now()-refreshedAt>=2000){await list();refreshedAt=Date.now()}
+        const next=lastTasks.find(t=>t.state==='running');
         if(!next)break;
         if(!bridge.capabilities?.includes('author-scan-v2')){await api('/api/authors/'+next.id+'/control',{action:'pause'});status('请更新并重新加载扩展（Cookie-Editor 1.14.3／独立版 1.5.3），再继续历史发现。');break;}
         const result=await browserCookieBridge('author-step',next.id,token);
@@ -267,12 +270,15 @@
           await list();break;
         }
         status(result.batch?.message||result.message||'正在处理…');
+        if(result.batch)lastTasks=lastTasks.map(t=>t.id===result.batch.id?result.batch:t);
         if(result.batch)await autoDownload(result.batch);
         // Preserve the single worker tab while a person handles verification.
         if(result.batch?.state==='needs_user')break;
-        await new Promise(resolve=>setTimeout(resolve,3500));
+        const delay=result.retry_after_ms || (result.status==='loading'?800:
+          next.phase==='scan'?3500:result.batch?.capture_claim_supported?250:Math.max(250,Math.min(3500,((result.batch?.not_before||0)*1000)-Date.now())));
+        await new Promise(resolve=>setTimeout(resolve,delay));
       }
-    }catch(e){status(e.message)}finally{driving=false;await list();if(resumeQueued&&!stopped){resumeQueued=false;drive()}}
+    }catch(e){driverError=e.message||String(e);status('本页采集循环已停止：'+driverError+'。请检查后点击“在本页继续采集”。')}finally{driving=false;await list();if(resumeQueued&&!stopped){resumeQueued=false;drive()}}
   }
   document.getElementById('authorStart').onclick=async()=>{
     if(starting||!connected||lastTasks.some(t=>t.state==='running'||t.state==='needs_user'))return;

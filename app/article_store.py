@@ -1,7 +1,62 @@
 """Indexed, transactional per-article storage with read-only legacy fallback."""
 import json
 import sqlite3
+from collections import OrderedDict
+import threading
 from storage import read
+
+_METRICS = OrderedDict()
+_METRICS_LOCK = threading.Lock()
+
+
+def contains_any(folder, candidates):
+    """Point lookups use the URL primary key, without reading article bodies."""
+    if not (folder / 'articles.sqlite3').exists():
+        return bool(urls(folder).intersection(candidates))
+    db = connect(folder)
+    try:
+        return any(db.execute('SELECT 1 FROM articles WHERE url=?', (url,)).fetchone() for url in candidates)
+    finally:
+        db.close()
+
+
+def image_counts(folder):
+    def fingerprint():
+        paths = [folder/name for name in ('articles.sqlite3', 'articles.sqlite3-wal', 'result.json')]
+        return tuple((p.stat().st_mtime_ns, p.stat().st_size) if p.exists() else None for p in paths)
+    key = str(folder.resolve())
+    stamp = fingerprint()
+    with _METRICS_LOCK:
+        cached = _METRICS.get(key)
+        if cached and cached[0] == stamp:
+            return dict(cached[1])
+    c = dict(total=0, complete=0, pending=0, failed=0, downloaded=0, pages=0, pagesWithImages=0, pagesComplete=0)
+    if (folder/'articles.sqlite3').exists():
+        db = connect(folder)
+        try:
+            # Transfer only image metadata from SQLite, never article text/HTML.
+            images_by_page = [json.loads(row[0] or '[]') for row in db.execute("SELECT json_extract(payload, '$.images') FROM articles")]
+        finally:
+            db.close()
+    else:
+        images_by_page = [p.get('images', []) for p in read(folder/'result.json', {}).get('pages', [])]
+    for images in images_by_page:
+        c['pages'] += 1
+        if images:
+            c['pagesWithImages'] += 1
+            if all(i.get('ocr') and not i.get('error') for i in images):
+                c['pagesComplete'] += 1
+        for item in images:
+            c['total'] += 1
+            c['downloaded'] += bool(item.get('file'))
+            c['failed' if item.get('error') else 'complete' if item.get('ocr') else 'pending'] += 1
+    with _METRICS_LOCK:
+        if stamp == fingerprint():
+            _METRICS[key] = (stamp, c)
+            _METRICS.move_to_end(key)
+            while len(_METRICS) > 128:
+                _METRICS.popitem(last=False)
+    return dict(c)
 
 
 def connect(folder):

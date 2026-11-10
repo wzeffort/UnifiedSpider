@@ -140,6 +140,20 @@ def author_report(batch_id: str, config: dict):
     return report(batch_id, config)
 
 
+@app.post('/api/authors/{batch_id}/claim')
+def author_claim(batch_id: str, config: dict):
+    from author_batch import claim
+    return claim(batch_id, config.get('worker'))
+
+
+@app.get('/api/authors/{batch_id}/image-counts')
+def author_image_counts(batch_id: str):
+    from author_batch import load
+    from article_store import image_counts
+    load(batch_id)
+    return image_counts(job_folder(batch_id))
+
+
 @app.post('/api/authors/{batch_id}/control')
 def author_control(batch_id: str, config: dict):
     from author_batch import control

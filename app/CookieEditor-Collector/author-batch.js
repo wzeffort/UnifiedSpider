@@ -1,5 +1,40 @@
 // Local tool requests one bounded browser step at a time. No credentials persist here.
 const authorStepLocks = new Set();
+const authorNavigationLocks = new Set();
+
+async function pacedAuthorNavigation(local, tabId, url) {
+  const host=new URL(url).hostname.replace(/^www\./,'');
+  const key='author-navigation:'+local+':'+host;
+  if(authorNavigationLocks.has(key))return false;
+  authorNavigationLocks.add(key);
+  try{
+    const last=(await chrome.storage.session.get(key))[key]||0;
+    if(Date.now()-last<3000)return false;
+    await chrome.storage.session.set({[key]:Date.now()});
+    await chrome.tabs.update(tabId,{url});
+    return true;
+  }finally{authorNavigationLocks.delete(key)}
+}
+
+async function prefetchAuthorArticle(local,key,batch) {
+  const spareKey=key+':spare', positionKey=spareKey+':position';
+  let spare;
+  const id=(await chrome.storage.session.get(spareKey))[spareKey];
+  if(id){try{spare=await chrome.tabs.get(id)}catch{}}
+  if(batch.state!=='running'||batch.phase!=='capture'||batch.article_retry){
+    if(spare)await chrome.tabs.update(spare.id,{url:'about:blank'});
+    await chrome.storage.session.remove(positionKey);
+    return;
+  }
+  const target=new URL(batch.url);
+  if(target.protocol!=='https:'||!['xueqiu.com','www.xueqiu.com','mp.weixin.qq.com'].includes(target.hostname)||target.username||target.password||target.port)return;
+  if(!(await chrome.permissions.contains({origins:[target.origin+'/*']})))return;
+  if(chrome.runtime.getManifest().name.includes('Cookie-Editor')&&!(await chrome.storage.local.get('collector-approved:'+target.origin))['collector-approved:'+target.origin])return;
+  if(!spare){spare=await chrome.tabs.create({url:'about:blank',active:false});await chrome.storage.session.set({[spareKey]:spare.id})}
+  if(await pacedAuthorNavigation(local,spare.id,batch.url)){
+    await chrome.storage.session.set({[positionKey]:batch.id+':capture:'+batch.url+':retry0'});
+  }
+}
 globalThis.runAuthorBatchStep = async function(message, sender, local) {
   const lock=sender.tab.id;
   if(authorStepLocks.has(lock))return {status:'loading',message:'上一步页面导航或正文提交尚未结束，正在等待。'};
@@ -12,8 +47,20 @@ async function runAuthorStep(message, sender, local) {
   const endpoint=local+'/api/authors/'+message.url;
   const response=await fetch(endpoint,{redirect:'error',credentials:'omit'});
   if(!response.ok)throw Error('Unknown batch');
-  const batch=await response.json();
-  if(batch.state!=='running' || Date.now()/1000<batch.not_before)return {status:'batch',batch};
+  let batch=await response.json(),captureLease;
+  if(batch.state!=='running')return {status:'batch',batch};
+  if(batch.capture_claim_supported){
+    const workerKey='author-worker-id:'+local+':'+sender.tab.id;
+    let worker=(await chrome.storage.session.get(workerKey))[workerKey];
+    if(!worker){worker=crypto.randomUUID();await chrome.storage.session.set({[workerKey]:worker})}
+    const claimed=await fetch(endpoint+'/claim',{method:'POST',credentials:'omit',redirect:'error',
+      headers:{'Content-Type':'application/json','X-Token':message.token},body:JSON.stringify({worker}),signal:AbortSignal.timeout(10000)});
+    const result=await claimed.json();
+    if(!claimed.ok)return {status:'error',message:result.error||'领取采集任务失败'};
+    if(result.status!=='claimed')return result;
+    batch=result.batch;captureLease=result.lease;
+  }
+  if(batch.phase!=='capture'&&Date.now()/1000<batch.not_before)return {status:'batch',batch,retry_after_ms:Math.max(250,Math.min(3000,batch.not_before*1000-Date.now()))};
   if(batch.phase==='capture'&&!batch.article_retry_supported)return {status:'error',message:'请先重启本地爬虫服务以加载失败重试功能，再继续原任务。'};
   const target=new URL(batch.url);
   if(target.protocol!=='https:' || !['xueqiu.com','www.xueqiu.com','mp.weixin.qq.com'].includes(target.hostname) || target.username || target.password || target.port)throw Error('Unsupported site');
@@ -22,7 +69,7 @@ async function runAuthorStep(message, sender, local) {
   if(chrome.runtime.getManifest().name.includes('Cookie-Editor') &&
      !(await chrome.storage.local.get('collector-approved:'+target.origin))['collector-approved:'+target.origin])
     return {status:'permission',message:'请先允许本站连接，再点击继续。'};
-  // One owned worker tab for this tool page, across authors and phases.
+  // Reuse at most two owned tabs. Only the leased current article may submit.
   const key='author-worker:'+sender.tab.id;
   const stored=(await chrome.storage.session.get(key))[key];
   let tab;
@@ -35,9 +82,22 @@ async function runAuthorStep(message, sender, local) {
   }
   const positionKey=key+':position';
   const position=batch.id+':'+batch.phase+':'+batch.url+':retry'+(batch.article_retry||0);
-  const last=(await chrome.storage.session.get(positionKey))[positionKey];
+  let last=(await chrome.storage.session.get(positionKey))[positionKey];
+  if(captureLease&&last!==position){
+    const spareKey=key+':spare', sparePosition=spareKey+':position';
+    if((await chrome.storage.session.get(sparePosition))[sparePosition]===position){
+      const spareId=(await chrome.storage.session.get(spareKey))[spareKey];
+      let spare;try{spare=await chrome.tabs.get(spareId)}catch{}
+      if(spare){
+        await chrome.storage.session.set({[key]:spare.id,[positionKey]:position,[spareKey]:tab.id,[sparePosition]:last});
+        tab=spare;last=position;
+      }
+    }
+  }
   if(last!==position){
-    await chrome.tabs.update(tab.id,{url:batch.url});
+    if(captureLease){
+      if(!(await pacedAuthorNavigation(local,tab.id,batch.url)))return {status:'loading',message:'保持文章访问间隔，稍后打开下一篇。',retry_after_ms:800};
+    }else await chrome.tabs.update(tab.id,{url:batch.url});
     await chrome.storage.session.set({[positionKey]:position});
     return {status:'loading',message:'正在打开作者采集页面。'};
   }
@@ -46,6 +106,8 @@ async function runAuthorStep(message, sender, local) {
   if(actual.origin!==target.origin && !(actual.protocol==='https:' && actual.hostname.replace(/^www\./,'')==='xueqiu.com' && target.hostname.replace(/^www\./,'')==='xueqiu.com'))
     return {status:'error',message:'采集标签页已跳转到其他网站，请回到指定作者网站后继续。'};
   if(!(await chrome.permissions.contains({origins:[actual.origin+'/*']})))return {status:'permission',permissionUrl:tab.url,message:'页面跳转到了本站的另一域名，请授权实际页面后继续。'};
+  // Loading may overlap the server's submission cooldown; reading/submitting may not.
+  if(Date.now()/1000<batch.not_before)return {status:'batch',batch,retry_after_ms:Math.max(250,Math.min(800,batch.not_before*1000-Date.now()))};
   const matchesArticle=value=>{
     try{
       const u=new URL(value);
@@ -103,11 +165,16 @@ async function runAuthorStep(message, sender, local) {
     if(latest.pendingUrl||latest.status!=='complete'||(latest.url!==documentData.url&&!(matchesArticle(latest.url)&&matchesArticle(documentData.url))))
       return {status:'loading',message:'读取正文期间页面发生导航，已丢弃本次内容，等待页面稳定。'};
   }
-  const payload=JSON.stringify({...documentData,revision:batch.revision});
+  const payload=JSON.stringify({...documentData,revision:batch.revision,...(captureLease?{capture_lease:captureLease}:{})});
   if(new TextEncoder().encode(payload).length>1900000)return {status:'error',message:'当前页面超过约 1.9 MB，请改用单页复制保存。任务可暂停后继续。'};
   const saved=await fetch(endpoint+'/report',{method:'POST',credentials:'omit',redirect:'error',
     headers:{'Content-Type':'application/json','X-Token':message.token},body:payload,signal:AbortSignal.timeout(10000)});
   const result=await saved.json();
+  // Preload only after the server accepted the current article. Never preload
+  // past a login/verification gate, a retry, or a stale revision.
+  if(saved.ok&&captureLease&&(result.processed>batch.processed||result.state!=='running')){
+    try{await prefetchAuthorArticle(local,key,result)}catch{/* Normal navigation will retry next time. */}
+  }
   if(saved.ok && result.state==='needs_user'){
     await chrome.tabs.update(tab.id,{active:true});
   }

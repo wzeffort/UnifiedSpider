@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cookie-Editor · 本机收集版（非官方）",
-  "version": "1.14.8",
+  "version": "1.14.9",
   "author": "Moustachauve",
   "description": "Cookie-Editor 修改版：保留编辑导出，新增按站点授权后连接本机网页资料收集助手。",
   "offline_enabled": true,
